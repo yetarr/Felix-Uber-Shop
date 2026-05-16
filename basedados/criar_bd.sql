@@ -14,7 +14,7 @@ CREATE TABLE utilizadores
     id_utilizador INT AUTO_INCREMENT PRIMARY KEY,
     nome          VARCHAR(100) NOT NULL,
     email         VARCHAR(150) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL, -- Usar MD5() em dev; bcrypt em produção
+    password_hash VARCHAR(255) NOT NULL,
     perfil        ENUM('cliente','funcionario','administrador') NOT NULL DEFAULT 'cliente',
     telefone      VARCHAR(20),
     morada        VARCHAR(255),
@@ -55,12 +55,12 @@ CREATE TABLE produtos
 CREATE TABLE encomenda
 (
     id_encomenda   INT AUTO_INCREMENT PRIMARY KEY,
-    codigo_unico   VARCHAR(20)    NOT NULL UNIQUE, -- Código para validação pelo funcionário
+    codigo_unico   VARCHAR(20)    NOT NULL UNIQUE,
     id_utilizador  INT            NOT NULL,
     data_encomenda DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
     estado         ENUM('pendente','processando','pronto','cancelado') NOT NULL DEFAULT 'pendente',
     total          DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
-    notas          TEXT,                           -- Observações opcionais do cliente
+    notas          TEXT,
     CONSTRAINT fk_encomenda_utilizador
         FOREIGN KEY (id_utilizador)
             REFERENCES utilizadores (id_utilizador)
@@ -94,7 +94,7 @@ CREATE TABLE promocoes
     id_promocao          INT AUTO_INCREMENT PRIMARY KEY,
     titulo               VARCHAR(200)  NOT NULL,
     descricao            TEXT,
-    desconto_percentagem DECIMAL(5, 2) NOT NULL DEFAULT 0.00, -- Ex: 15.00 = 15%
+    desconto_percentagem DECIMAL(5, 2) NOT NULL DEFAULT 0.00,
     data_inicio          DATE          NOT NULL,
     data_fim             DATE          NOT NULL,
     ativo                TINYINT(1)     NOT NULL DEFAULT 1,
@@ -160,8 +160,6 @@ VALUES ('Cliente Teste', 'cliente@felixubershop.pt', MD5('cliente'), 'cliente', 
         'Av. Principal 10, Castelo Branco'),
        ('Administrador', 'admin@felixubershop.pt', MD5('admin'), 'administrador', '934 567 890',
         'Praça Central 5, Castelo Branco');
-
--- Criar carteiras iniciais para os utilizadores de teste
 INSERT INTO carteira (id_utilizador, saldo, is_loja)
 SELECT id_utilizador, 50.00, 0
 FROM utilizadores
