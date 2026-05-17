@@ -1,6 +1,6 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*, java.sql.*, java.security.MessageDigest, java.nio.charset.StandardCharsets" %>
-<%@ include file="basedados/basedados.h" %>
+<%@ include file="../basedados/basedados.h" %>
 <%!
     private String hashPassword(String plain) {
         try {
@@ -612,7 +612,7 @@
             Olá, <strong style="color:#e0e0e0;margin-left:4px;"><%= funcName %>
         </strong>
         </div>
-        <a href="LogoutServlet" class="btn-sair">Sair</a>
+        <a href="logout.jsp" class="btn-sair">Sair</a>
     </div>
 </nav>
 

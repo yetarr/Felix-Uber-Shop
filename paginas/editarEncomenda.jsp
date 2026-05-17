@@ -1,107 +1,194 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*" %>
-<%@ include file="basedados/basedados.h" %>
+<%@ page import="java.sql.*" %>
+<%@ include file="../basedados/basedados.h" %>
 <%
-    // Session check
     if (session.getAttribute("userId") == null) {
         response.sendRedirect("login.jsp");
         return;
     }
     String clienteName = (String) session.getAttribute("userName");
+    int userId = (Integer) session.getAttribute("userId");
     String orderId = request.getParameter("id") != null ? request.getParameter("id") : "0";
+    int orderIdInt = 0;
+    try { orderIdInt = Integer.parseInt(orderId); } catch (Exception _ex) {}
 
-    String saldoCliente = "0,00";
-    List<Object[]> catalogue = new ArrayList<>();
-
-    Connection _conn4 = null;
-    PreparedStatement _ps4 = null;
-    ResultSet _rs4 = null;
-    try {
-        _conn4 = getConnection();
-        int userId = (Integer) session.getAttribute("userId");
-
-        // Wallet balance
-        _ps4 = _conn4.prepareStatement("SELECT saldo FROM carteira WHERE id_utilizador = ?");
-        _ps4.setInt(1, userId);
-        _rs4 = _ps4.executeQuery();
-        if (_rs4.next()) {
-            saldoCliente = String.format("%.2f", _rs4.getDouble("saldo")).replace(".", ",");
-        }
-        closeAll(_rs4, _ps4, null);
-
-        // Catalogue with current order quantities
-        int orderIdInt = 0;
-        try { orderIdInt = Integer.parseInt(orderId); } catch (Exception _ex4) {}
-        _ps4 = _conn4.prepareStatement(
-            "SELECT p.id_produto, p.nome, p.categoria, CAST(p.preco*100 AS SIGNED) as preco_cents, " +
-            "0 as desconto, COALESCE(ep.quantidade,0) as qty_atual, CAST(p.preco*100 AS SIGNED) as preco_orig " +
-            "FROM produtos p " +
-            "LEFT JOIN encomenda_produto ep ON ep.id_produto=p.id_produto AND ep.id_encomenda=? " +
-            "WHERE p.ativo=1 ORDER BY p.nome");
-        _ps4.setInt(1, orderIdInt);
-        _rs4 = _ps4.executeQuery();
-        while (_rs4.next()) {
-            catalogue.add(new Object[]{
-                String.valueOf(_rs4.getInt("id_produto")),
-                _rs4.getString("nome"),
-                _rs4.getString("categoria") != null ? _rs4.getString("categoria") : "",
-                (int) _rs4.getLong("preco_cents"),
-                0,
-                _rs4.getInt("qty_atual"),
-                (int) _rs4.getLong("preco_orig")
-            });
-        }
-    } catch (Exception _e4) {
-        // page renders with empty catalogue on error
-    } finally {
-        closeAll(_rs4, _ps4, _conn4);
-    }
-
-    HttpSession sess = session;
-    String successMsg = (String) sess.getAttribute("success");
-    if (successMsg != null) sess.removeAttribute("success");
+    String successMsg = (String) session.getAttribute("success");
+    if (successMsg != null) session.removeAttribute("success");
     String errorMsg = null;
 
     if ("POST".equalsIgnoreCase(request.getMethod())) {
-        String orderIdStr = request.getParameter("orderId");
-        Integer userId = (Integer) sess.getAttribute("userId");
+        Connection uConn = null;
+        PreparedStatement uPs = null;
+        ResultSet uRs = null;
         try {
-            int oid = Integer.parseInt(orderIdStr);
-            Connection conn = getConnection();
-            PreparedStatement ps = conn.prepareStatement(
-                "SELECT estado, total FROM encomenda WHERE id_encomenda = ? AND id_utilizador = ?");
-            ps.setInt(1, oid); ps.setInt(2, userId); ResultSet rs = ps.executeQuery();
-            if (!rs.next()) { rs.close(); ps.close(); conn.close(); errorMsg = "Encomenda não encontrada."; }
-            else if (!"pendente".equals(rs.getString("estado"))) { rs.close(); ps.close(); conn.close(); errorMsg = "Só é possível editar encomendas pendentes."; }
-            else {
-                rs.close(); ps.close();
-                ps = conn.prepareStatement("DELETE FROM encomenda_produto WHERE id_encomenda = ?");
-                ps.setInt(1, oid); ps.executeUpdate(); ps.close();
+            int oid = Integer.parseInt(request.getParameter("orderId"));
+            uConn = getConnection();
+            uConn.setAutoCommit(false);
+
+            uPs = uConn.prepareStatement(
+                "SELECT estado FROM encomenda WHERE id_encomenda = ? AND id_utilizador = ?");
+            uPs.setInt(1, oid); uPs.setInt(2, userId);
+            uRs = uPs.executeQuery();
+            if (!uRs.next()) {
+                uConn.rollback();
+                errorMsg = "Encomenda não encontrada.";
+            } else if (!"pendente".equals(uRs.getString("estado"))) {
+                uConn.rollback();
+                errorMsg = "Só é possível editar encomendas pendentes.";
+            } else {
+                closeAll(uRs, uPs, null);
+
+                uPs = uConn.prepareStatement("SELECT saldo FROM carteira WHERE id_utilizador = ?");
+                uPs.setInt(1, userId);
+                uRs = uPs.executeQuery();
+                double saldoActual = uRs.next() ? uRs.getDouble("saldo") : 0;
+                closeAll(uRs, uPs, null);
+
+                uPs = uConn.prepareStatement("DELETE FROM encomenda_produto WHERE id_encomenda = ?");
+                uPs.setInt(1, oid);
+                uPs.executeUpdate();
+                closeAll(null, uPs, null);
+
                 double total = 0;
+                int itemsCount = 0;
                 for (java.util.Enumeration<String> params = request.getParameterNames(); params.hasMoreElements();) {
                     String param = params.nextElement();
-                    if (param.startsWith("produto_")) {
-                        int pid = Integer.parseInt(param.substring("produto_".length()));
-                        int qty = Integer.parseInt(request.getParameter(param));
-                        if (qty > 0) {
-                            ps = conn.prepareStatement("SELECT preco FROM produtos WHERE id_produto = ?");
-                            ps.setInt(1, pid); rs = ps.executeQuery();
-                            double preco = rs.next() ? rs.getDouble("preco") : 0; rs.close(); ps.close();
-                            ps = conn.prepareStatement("INSERT INTO encomenda_produto (id_encomenda, id_produto, quantidade, preco_unitario) VALUES (?,?,?,?)");
-                            ps.setInt(1, oid); ps.setInt(2, pid); ps.setInt(3, qty); ps.setDouble(4, preco);
-                            ps.executeUpdate(); ps.close();
-                            total += preco * qty;
-                        }
-                    }
+                    if (!param.startsWith("produto_")) continue;
+                    int pid;
+                    int qty;
+                    try {
+                        pid = Integer.parseInt(param.substring("produto_".length()));
+                        qty = Integer.parseInt(request.getParameter(param));
+                    } catch (NumberFormatException nfe) { continue; }
+                    if (qty <= 0) continue;
+
+                    uPs = uConn.prepareStatement(
+                        "SELECT p.preco, COALESCE(MAX(pr.desconto_percentagem),0) AS desc_pct " +
+                        "FROM produtos p " +
+                        "LEFT JOIN promocao_produto pp ON pp.id_produto = p.id_produto " +
+                        "LEFT JOIN promocoes pr ON pr.id_promocao = pp.id_promocao " +
+                        "  AND pr.ativo = 1 AND CURDATE() BETWEEN pr.data_inicio AND pr.data_fim " +
+                        "WHERE p.id_produto = ? AND p.ativo = 1 " +
+                        "GROUP BY p.id_produto, p.preco");
+                    uPs.setInt(1, pid);
+                    uRs = uPs.executeQuery();
+                    if (!uRs.next()) { closeAll(uRs, uPs, null); continue; }
+                    double preco = uRs.getDouble("preco");
+                    double desc = uRs.getDouble("desc_pct");
+                    double precoFinal = Math.round(preco * (100.0 - desc)) / 100.0;
+                    closeAll(uRs, uPs, null);
+
+                    uPs = uConn.prepareStatement(
+                        "INSERT INTO encomenda_produto (id_encomenda, id_produto, quantidade, preco_unitario) " +
+                        "VALUES (?, ?, ?, ?)");
+                    uPs.setInt(1, oid);
+                    uPs.setInt(2, pid);
+                    uPs.setInt(3, qty);
+                    uPs.setDouble(4, precoFinal);
+                    uPs.executeUpdate();
+                    closeAll(null, uPs, null);
+
+                    total += precoFinal * qty;
+                    itemsCount++;
                 }
-                ps = conn.prepareStatement("UPDATE encomenda SET total = ? WHERE id_encomenda = ?");
-                ps.setDouble(1, total); ps.setInt(2, oid); ps.executeUpdate(); closeAll(null, ps, conn);
-                sess.setAttribute("success", "Encomenda atualizada com sucesso.");
-                response.sendRedirect("editarEncomenda.jsp?id=" + oid); return;
+
+                if (itemsCount == 0) {
+                    uConn.rollback();
+                    errorMsg = "A encomenda deve conter pelo menos um produto.";
+                } else if (total > saldoActual) {
+                    uConn.rollback();
+                    errorMsg = "Saldo insuficiente para concluir a encomenda.";
+                } else {
+                    uPs = uConn.prepareStatement("UPDATE encomenda SET total = ? WHERE id_encomenda = ?");
+                    uPs.setDouble(1, total);
+                    uPs.setInt(2, oid);
+                    uPs.executeUpdate();
+                    closeAll(null, uPs, null);
+
+                    uConn.commit();
+                    session.setAttribute("success", "Encomenda atualizada com sucesso.");
+                    response.sendRedirect("editarEncomenda.jsp?id=" + oid);
+                    return;
+                }
             }
-        } catch (Exception e) { errorMsg = "Erro: " + e.getMessage(); }
+        } catch (Exception e) {
+            errorMsg = "Erro: " + e.getMessage();
+            if (uConn != null) try { uConn.rollback(); } catch (SQLException ignored) {}
+        } finally {
+            if (uConn != null) try { uConn.setAutoCommit(true); } catch (SQLException ignored) {}
+            closeAll(uRs, uPs, uConn);
+        }
     }
 
+    String saldoCliente = "0,00";
+    List<Object[]> catalogue = new ArrayList<>();
+    String orderEstado = "";
+    boolean orderFound = false;
+
+    Connection conn = null;
+    PreparedStatement ps = null;
+    ResultSet rs = null;
+    try {
+        conn = getConnection();
+
+        ps = conn.prepareStatement(
+            "SELECT estado FROM encomenda WHERE id_encomenda = ? AND id_utilizador = ?");
+        ps.setInt(1, orderIdInt);
+        ps.setInt(2, userId);
+        rs = ps.executeQuery();
+        if (rs.next()) {
+            orderFound = true;
+            orderEstado = rs.getString("estado");
+        }
+        closeAll(rs, ps, null);
+
+        ps = conn.prepareStatement("SELECT saldo FROM carteira WHERE id_utilizador = ?");
+        ps.setInt(1, userId);
+        rs = ps.executeQuery();
+        if (rs.next()) {
+            saldoCliente = String.format("%.2f", rs.getDouble("saldo")).replace(".", ",");
+        }
+        closeAll(rs, ps, null);
+
+        ps = conn.prepareStatement(
+            "SELECT p.id_produto, p.nome, p.categoria, " +
+            "CAST(p.preco*100 AS SIGNED) AS preco_orig_cents, " +
+            "COALESCE(MAX(pr.desconto_percentagem),0) AS desc_pct, " +
+            "COALESCE(ep.quantidade,0) AS qty_atual " +
+            "FROM produtos p " +
+            "LEFT JOIN promocao_produto pp ON pp.id_produto = p.id_produto " +
+            "LEFT JOIN promocoes pr ON pr.id_promocao = pp.id_promocao " +
+            "  AND pr.ativo = 1 AND CURDATE() BETWEEN pr.data_inicio AND pr.data_fim " +
+            "LEFT JOIN encomenda_produto ep ON ep.id_produto = p.id_produto AND ep.id_encomenda = ? " +
+            "WHERE p.ativo = 1 " +
+            "GROUP BY p.id_produto, p.nome, p.categoria, p.preco, ep.quantidade " +
+            "ORDER BY p.nome");
+        ps.setInt(1, orderIdInt);
+        rs = ps.executeQuery();
+        while (rs.next()) {
+            int priceOrig = (int) rs.getLong("preco_orig_cents");
+            int discPct = (int) Math.round(rs.getDouble("desc_pct"));
+            int priceFinal = discPct > 0
+                ? (int) Math.round(priceOrig * (100.0 - discPct) / 100.0)
+                : priceOrig;
+            catalogue.add(new Object[]{
+                String.valueOf(rs.getInt("id_produto")),
+                rs.getString("nome"),
+                rs.getString("categoria") != null ? rs.getString("categoria") : "",
+                priceFinal,
+                discPct,
+                rs.getInt("qty_atual"),
+                priceOrig
+            });
+        }
+    } catch (Exception e) {
+        // page renders with empty catalogue on error
+    } finally {
+        closeAll(rs, ps, conn);
+    }
+
+    boolean isEditable = orderFound && "pendente".equals(orderEstado);
     String activePage = "encomendas";
 %>
 <!DOCTYPE html>
@@ -109,8 +196,7 @@
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>FelixUberShop – Editar Encomenda #<%= orderId %>
-    </title>
+    <title>FelixUberShop – Editar Encomenda #<%= orderId %></title>
     <style>
         *, *::before, *::after {
             box-sizing: border-box;
@@ -286,10 +372,7 @@
             color: #00CE86;
         }
 
-        .alert-error {
-            background: rgba(220, 60, 60, .1);
-            border: 1px solid rgba(220, 60, 60, .3);
-            color: #f08080;
+        .alert {
             border-radius: 8px;
             padding: 11px 16px;
             font-size: .86rem;
@@ -297,6 +380,24 @@
             display: flex;
             align-items: center;
             gap: 10px;
+        }
+
+        .alert-error {
+            background: rgba(220, 60, 60, .1);
+            border: 1px solid rgba(220, 60, 60, .3);
+            color: #f08080;
+        }
+
+        .alert-success {
+            background: rgba(0, 206, 134, .1);
+            border: 1px solid rgba(0, 206, 134, .3);
+            color: #00CE86;
+        }
+
+        .alert-warn {
+            background: rgba(245, 166, 35, .08);
+            border: 1px solid rgba(245, 166, 35, .25);
+            color: #f5a623;
         }
 
         .editor-grid {
@@ -338,6 +439,25 @@
             grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
             gap: 12px;
             padding: 16px;
+            max-height: 460px;
+            overflow-y: auto;
+        }
+
+        .product-grid::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        .product-grid::-webkit-scrollbar-track {
+            background: #1e1e1e;
+        }
+
+        .product-grid::-webkit-scrollbar-thumb {
+            background: #3a3a3a;
+            border-radius: 6px;
+        }
+
+        .product-grid::-webkit-scrollbar-thumb:hover {
+            background: #555;
         }
 
         .product-card {
@@ -360,20 +480,23 @@
         }
 
         .product-img {
-            width: 52px;
-            height: 52px;
+            width: 64px;
+            height: 64px;
             background: #2a2a2a;
             border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 2px;
+            margin-bottom: 4px;
+            color: #555;
+            font-size: .7rem;
+            gap: 4px;
         }
 
         .product-img svg {
-            fill: #444;
-            width: 26px;
-            height: 26px;
+            fill: #555;
+            width: 16px;
+            height: 16px;
         }
 
         .disc-badge {
@@ -397,15 +520,22 @@
             line-height: 1.2;
         }
 
-        .product-qlbl {
-            font-size: .73rem;
-            color: #666;
+        .product-price-row {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
         }
 
         .product-price {
             font-size: .95rem;
             font-weight: 700;
             color: #fff;
+        }
+
+        .product-price-orig {
+            font-size: .75rem;
+            color: #777;
+            text-decoration: line-through;
         }
 
         .stepper {
@@ -434,13 +564,14 @@
             flex-shrink: 0;
         }
 
-        .stepper button:hover {
+        .stepper button:hover:not(:disabled) {
             background: #3a3a3a;
             color: #00CE86;
         }
 
-        .stepper button:active {
-            background: #444;
+        .stepper button:disabled {
+            color: #444;
+            cursor: not-allowed;
         }
 
         .stepper .qty-val {
@@ -494,6 +625,8 @@
 
         .order-items {
             min-height: 44px;
+            max-height: 220px;
+            overflow-y: auto;
         }
 
         .order-item {
@@ -579,11 +712,11 @@
             transition: background .2s, transform .1s;
         }
 
-        .btn-confirmar:hover {
+        .btn-confirmar:hover:not(:disabled) {
             background: #00b876;
         }
 
-        .btn-confirmar:active {
+        .btn-confirmar:active:not(:disabled) {
             transform: scale(.98);
         }
 
@@ -674,6 +807,13 @@
             border-radius: 20px;
         }
 
+        .promo-empty {
+            padding: 14px 16px;
+            text-align: center;
+            font-size: .78rem;
+            color: #555;
+        }
+
         @media (max-width: 750px) {
             .editor-grid {
                 grid-template-columns: 1fr;
@@ -723,10 +863,9 @@
             <svg viewBox="0 0 24 24">
                 <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
             </svg>
-            Olá, <strong style="color:#e0e0e0;margin-left:4px;"><%= clienteName %>
-        </strong>
+            Olá, <strong style="color:#e0e0e0;margin-left:4px;"><%= clienteName %></strong>
         </div>
-        <a href="LogoutServlet" class="btn-sair">Sair</a>
+        <a href="logout.jsp" class="btn-sair">Sair</a>
     </div>
 </nav>
 
@@ -769,7 +908,7 @@
         <h1 class="page-title">Editar encomenda <span>#<%= orderId %></span></h1>
 
         <% if (successMsg != null && !successMsg.isEmpty()) { %>
-        <div class="alert-error" style="background:rgba(0,206,134,.1);border-color:rgba(0,206,134,.3);color:#00CE86;">
+        <div class="alert alert-success">
             <svg viewBox="0 0 24 24" width="17" height="17" fill="#00CE86">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14l-4-4 1.41-1.41L10 13.17l6.59-6.59L18 8l-8 8z"/>
             </svg>
@@ -777,17 +916,31 @@
         </div>
         <% } %>
         <% if (errorMsg != null && !errorMsg.isEmpty()) { %>
-        <div class="alert-error">
+        <div class="alert alert-error">
             <svg viewBox="0 0 24 24" width="17" height="17" fill="#f08080">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
             </svg>
             <%= errorMsg %>
         </div>
         <% } %>
+        <% if (!orderFound) { %>
+        <div class="alert alert-error">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="#f08080">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+            </svg>
+            Encomenda não encontrada ou não pertence a este cliente.
+        </div>
+        <% } else if (!isEditable) { %>
+        <div class="alert alert-warn">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="#f5a623">
+                <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+            </svg>
+            Esta encomenda está no estado &laquo;<%= orderEstado %>&raquo; e já não pode ser editada.
+        </div>
+        <% } %>
 
         <div class="editor-grid">
 
-            <!-- LEFT: PRODUCT GRID -->
             <div class="panel">
                 <div class="panel-header">
                     <svg class="panel-icon" viewBox="0 0 24 24">
@@ -805,42 +958,45 @@
                             int price = (Integer) p[3];
                             int disc = (Integer) p[4];
                             int curQty = (Integer) p[5];
+                            int priceOrig = (Integer) p[6];
                             String priceStr = String.format("%d,%02d €", price / 100, price % 100);
+                            String priceOrigStr = String.format("%d,%02d €", priceOrig / 100, priceOrig % 100);
                             String fullName = pname + (!pqlbl.isEmpty() ? " " + pqlbl : "");
+                            String safeName = fullName.replace("'", "\\'");
+                            String disabledAttr = isEditable ? "" : "disabled";
                     %>
                     <div class="product-card <%= curQty > 0 ? "has-qty" : "" %>" id="card-<%= pid %>">
                         <% if (disc > 0) { %><span class="disc-badge">-<%= disc %>%</span><% } %>
                         <div class="product-img">
                             <svg viewBox="0 0 24 24">
-                                <path d="M18.06 22.99h1.66c.84 0 1.53-.64 1.63-1.46L23 5.05h-5V1h-1.97v4.05h-4.97l.3 2.34c1.71.47 3.31 1.32 4.27 2.26 1.44 1.42 2.43 2.89 2.43 5.29v8.05zM1 21.99V21h15.03v.99c0 .55-.45 1-1.01 1H2.01c-.56 0-1.01-.45-1.01-1zm15.03-7c0-3.87-3.13-7-7-7S2 11.12 2 14.99v2h14.03v-2z"/>
+                                <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
                             </svg>
+                            <span>foto</span>
                         </div>
-                        <div class="product-name"><%= pname %>
-                        </div>
-                        <% if (!pqlbl.isEmpty()) { %>
-                        <div class="product-qlbl"><%= pqlbl %>
-                        </div>
-                        <% } %>
-                        <div class="product-price"><%= priceStr %>
+                        <div class="product-name"><%= pname %></div>
+                        <div class="product-price-row">
+                            <span class="product-price"><%= priceStr %></span>
+                            <% if (disc > 0) { %>
+                            <span class="product-price-orig"><%= priceOrigStr %></span>
+                            <% } %>
                         </div>
                         <div class="stepper">
-                            <button type="button" onclick="changeQty('<%= pid %>',-1,<%= price %>,'<%= fullName %>')">
-                                &#8722;
-                            </button>
+                            <button type="button" <%= disabledAttr %>
+                                    onclick="changeQty('<%= pid %>',-1,<%= price %>,'<%= safeName %>')">&#8722;</button>
                             <span class="qty-val" id="qty-<%= pid %>"><%= curQty %></span>
-                            <button type="button" onclick="changeQty('<%= pid %>',1,<%= price %>,'<%= fullName %>')">
-                                &#43;
-                            </button>
+                            <button type="button" <%= disabledAttr %>
+                                    onclick="changeQty('<%= pid %>',1,<%= price %>,'<%= safeName %>')">&#43;</button>
                         </div>
                     </div>
+                    <% } %>
+                    <% if (catalogue.isEmpty()) { %>
+                    <div class="empty-cart" style="grid-column:1/-1;">Sem produtos disponíveis.</div>
                     <% } %>
                 </div>
             </div>
 
-            <!-- RIGHT COLUMN -->
             <div class="right-col">
 
-                <!-- Summary -->
                 <div class="summary-panel">
                     <div class="summary-header">
                         <div class="summary-title">Resumo</div>
@@ -860,7 +1016,7 @@
                               onsubmit="return prepareSubmit()">
                             <input type="hidden" name="orderId" value="<%= orderId %>"/>
                             <div id="hiddenInputs"></div>
-                            <button type="submit" class="btn-confirmar" id="btnConfirmar">
+                            <button type="submit" class="btn-confirmar" id="btnConfirmar" <%= isEditable ? "" : "disabled" %>>
                                 Confirmar encomenda
                             </button>
                         </form>
@@ -873,7 +1029,6 @@
                     </div>
                 </div>
 
-                <!-- Active promos -->
                 <div class="promos-panel">
                     <div class="promos-header">
                         <div class="promos-title">
@@ -883,21 +1038,30 @@
                             Promoções ativas
                         </div>
                     </div>
+                    <%
+                        boolean anyPromo = false;
+                        for (Object[] p : catalogue) {
+                            if ((Integer) p[4] > 0) { anyPromo = true; break; }
+                        }
+                    %>
+                    <% if (!anyPromo) { %>
+                    <div class="promo-empty">Sem promoções ativas no momento.</div>
+                    <% } else { %>
                     <ul class="promo-list">
                         <%
                             for (Object[] p : catalogue) {
                                 int disc = (Integer) p[4];
                                 if (disc > 0) {
                                     String pn = (String) p[1];
-                                    String ql = (String) p[2];
                         %>
                         <li class="promo-item">
-                            <span class="pname"><%= pn %><%= !ql.isEmpty() ? " " + ql : "" %></span>
+                            <span class="pname"><%= pn %></span>
                             <span class="pbadge">-<%= disc %>%</span>
                         </li>
                         <% }
                         } %>
                     </ul>
+                    <% } %>
                 </div>
 
             </div>
@@ -907,6 +1071,7 @@
 
 <script>
     const saldo = <%= saldoCliente.replace(",", ".") %>;
+    const editable = <%= isEditable %>;
     const cart = {};
 
     <% for (Object[] p : catalogue) {
@@ -915,8 +1080,10 @@
            String ql   = (String)  p[2];
            int price   = (Integer) p[3];
            int curQty  = (Integer) p[5];
-           if (curQty > 0) { %>
-    cart['<%= pid %>'] = {name: '<%= pn + (!ql.isEmpty() ? " "+ql : "") %>', price: <%= price %>, qty: <%= curQty %>};
+           if (curQty > 0) {
+               String safe = (pn + (!ql.isEmpty() ? " "+ql : "")).replace("'", "\\'");
+    %>
+    cart['<%= pid %>'] = {name: '<%= safe %>', price: <%= price %>, qty: <%= curQty %>};
     <% }} %>
 
     function fmt(cents) {
@@ -924,6 +1091,7 @@
     }
 
     function changeQty(pid, delta, price, name) {
+        if (!editable) return;
         const el = document.getElementById('qty-' + pid);
         const card = document.getElementById('card-' + pid);
         let qty = parseInt(el.textContent) + delta;
@@ -942,11 +1110,12 @@
     function render() {
         const items = Object.entries(cart);
         const box = document.getElementById('orderItems');
+        const btn = document.getElementById('btnConfirmar');
 
         if (!items.length) {
             box.innerHTML = '<div class="empty-cart">Nenhum produto selecionado.</div>';
             document.getElementById('totalValue').textContent = '0,00 €';
-            document.getElementById('btnConfirmar').disabled = true;
+            if (editable) btn.disabled = true;
             document.getElementById('saldoWarn').style.display = 'none';
             return;
         }
@@ -955,26 +1124,28 @@
         items.forEach(([, item]) => {
             const sub = item.price * item.qty;
             total += sub;
-            html += `<div class="order-item">
-                    <span><span class="iname">${item.name}</span><span class="iqty">x ${item.qty}</span></span>
-                    <span class="iprice">${fmt(sub)}</span>
-                </div>`;
+            html += '<div class="order-item">' +
+                    '<span><span class="iname">' + item.name + '</span>' +
+                    '<span class="iqty">× ' + item.qty + '</span></span>' +
+                    '<span class="iprice">' + fmt(sub) + '</span>' +
+                    '</div>';
         });
         box.innerHTML = html;
         document.getElementById('totalValue').textContent = fmt(total);
 
         const insuf = total > Math.round(saldo * 100);
         document.getElementById('saldoWarn').style.display = insuf ? 'block' : 'none';
-        document.getElementById('btnConfirmar').disabled = insuf;
+        if (editable) btn.disabled = insuf;
     }
 
     function prepareSubmit() {
+        if (!editable) return false;
         const hi = document.getElementById('hiddenInputs');
         hi.innerHTML = '';
         const entries = Object.entries(cart);
         if (!entries.length) return false;
         entries.forEach(([pid, item]) => {
-            hi.innerHTML += `<input type="hidden" name="produto_${pid}" value="${item.qty}"/>`;
+            hi.innerHTML += '<input type="hidden" name="produto_' + pid + '" value="' + item.qty + '"/>';
         });
         return true;
     }

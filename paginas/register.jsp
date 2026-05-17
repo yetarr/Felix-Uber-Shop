@@ -1,7 +1,7 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*" %>
 <%@ page import="java.security.MessageDigest, java.nio.charset.StandardCharsets" %>
-<%@ include file="basedados/basedados.h"%>
+<%@ include file="../basedados/basedados.h"%>
 <%!
     // Hashing da password
     private String hashPassword(String plain) {

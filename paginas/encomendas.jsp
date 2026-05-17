@@ -1,11 +1,18 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*" %>
-<%@ include file="basedados/basedados.h" %>
+<%@ page import="java.sql.*" %>
+<%@ include file="../basedados/basedados.h" %>
 <%
+    // Verificacao da sessao
     HttpSession sess = request.getSession(false);
     if (sess == null || sess.getAttribute("userId") == null) {
         response.sendRedirect("login.jsp");
         return;
+    }
+
+    String role = (String) sess.getAttribute("userRole");
+    if(!role.equals("cliente")){
+        response.sendRedirect("login.jsp");
     }
 
     String clienteName = (String) sess.getAttribute("userName");
@@ -16,6 +23,8 @@
 
     String successMsg = (String) request.getAttribute("success");
     String errorMsg   = (String) request.getAttribute("error");
+    sess.removeAttribute("success");
+    sess.removeAttribute("error");
 
     String openDetail = request.getParameter("detalhe");
 
@@ -25,50 +34,59 @@
     try {
         conn = getConnection();
 
-        // Load orders for this user
+        // Obter todas as encomendas do utilizador
         String sql = "SELECT e.id_encomenda, u.nome, e.data_encomenda, e.total, e.estado " +
-                     "FROM encomenda e JOIN utilizadores u ON u.id_utilizador = e.id_utilizador " +
-                     "WHERE e.id_utilizador = ? ORDER BY e.data_encomenda DESC";
+                "FROM encomenda e JOIN utilizadores u ON u.id_utilizador = e.id_utilizador " +
+                "WHERE e.id_utilizador = ? " +
+                "ORDER BY e.data_encomenda DESC ";;
         ps = conn.prepareStatement(sql);
         ps.setInt(1, userId);
         rs = ps.executeQuery();
         while (rs.next()) {
-            String id     = rs.getString("id_encomenda");
-            String nome   = rs.getString("nome");
-            String data   = rs.getString("data_encomenda");
-            String total  = String.format("%.2f €", rs.getDouble("total")).replace(".", ",");
+            String id = rs.getString("id_encomenda");
+            String cliente = rs.getString("nome");
+            String data = rs.getString("data_encomenda");
+            String total = String.format("%.2f €", rs.getDouble("total")).replace(".", ",");
             String estado = rs.getString("estado");
-            orders.add(new String[]{id, nome, data, total, estado});
+            orders.add(new String[]{id, cliente, data, total, estado});
         }
-        closeAll(rs, ps, null);
+        rs.close(); ps.close();
         rs = null; ps = null;
 
-        // Determine which order detail to open
         if (openDetail == null && !orders.isEmpty()) openDetail = orders.get(0)[0];
 
-        // Load items for the open order only
-        if (openDetail != null && !openDetail.isEmpty()) {
-            String sqlItems = "SELECT p.nome, ep.preco_unitario, ep.quantidade " +
-                              "FROM encomenda_produto ep JOIN produtos p ON p.id_produto = ep.id_produto " +
-                              "WHERE ep.id_encomenda = ?";
-            ps = conn.prepareStatement(sqlItems);
-            ps.setInt(1, Integer.parseInt(openDetail));
+        // Obter itens de todas as encomendas
+        String sqlItems = "SELECT p.nome, ep.preco_unitario, ep.quantidade " +
+                "FROM encomenda_produto ep JOIN produtos p ON p.id_produto = ep.id_produto " +
+                "WHERE ep.id_encomenda = ?";
+        ps = conn.prepareStatement(sqlItems);
+
+        for (String[] order : orders) {
+            String oid = order[0];
+            ps.setInt(1, Integer.parseInt(oid));
             rs = ps.executeQuery();
+
             List<String[]> itemsList = new ArrayList<>();
             while (rs.next()) {
-                String nome        = rs.getString("nome");
-                double preco       = rs.getDouble("preco_unitario");
-                int    qty         = rs.getInt("quantidade");
+                String nome = rs.getString("nome");
+                double preco = rs.getDouble("preco_unitario");
+                int qty = rs.getInt("quantidade");
                 String fmtPreco    = String.format("%.2f €", preco).replace(".", ",");
                 String fmtSubtotal = String.format("%.2f €", preco * qty).replace(".", ",");
                 itemsList.add(new String[]{nome, fmtPreco, String.valueOf(qty), fmtSubtotal});
             }
-            details.put(openDetail, itemsList.toArray(new String[0][]));
+
+            details.put(oid, itemsList.toArray(new String[0][]));
+            rs.close();
         }
+        ps.close();
+        rs = null; ps = null;
     } catch (Exception e) {
-        // Page renders with empty lists on error
+        // Ignorar erros
     } finally {
-        closeAll(rs, ps, conn);
+        try { if (rs != null) rs.close(); } catch (Exception ignored) {}
+        try { if (ps != null) ps.close(); } catch (Exception ignored) {}
+        try { if (conn != null) conn.close(); } catch (Exception ignored) {}
     }
 
     String activePage = "encomendas";
@@ -630,7 +648,6 @@
 </head>
 <body>
 
-<!-- TOP NAV -->
 <nav class="topnav">
     <a href="index.jsp" class="nav-brand">FelixUberShop</a>
     <div class="nav-right">
@@ -641,13 +658,12 @@
             Olá, <strong style="color:#e0e0e0;margin-left:4px;"><%= clienteName %>
         </strong>
         </div>
-        <a href="LogoutServlet" class="btn-sair">Sair</a>
+        <a href="logout.jsp" class="btn-sair">Sair</a>
     </div>
 </nav>
 
 <div class="app-shell">
 
-    <!-- SIDEBAR -->
     <aside class="sidebar">
         <div class="sidebar-label">Área Cliente</div>
         <ul class="sidebar-nav">
@@ -686,10 +702,8 @@
         </ul>
     </aside>
 
-    <!-- MAIN -->
     <main class="main-content">
 
-        <!-- Header row -->
         <div class="page-header">
             <h1 class="page-title">As minhas encomendas</h1>
             <a href="novaEncomendaCliente.jsp" class="btn-nova">
@@ -700,7 +714,6 @@
             </a>
         </div>
 
-        <!-- Info banner -->
         <div class="info-banner">
             <svg viewBox="0 0 24 24">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
@@ -709,7 +722,6 @@
             <strong>ID &bull; Cliente &bull; Data &bull; Total</strong>
         </div>
 
-        <!-- Flash messages -->
         <% if (successMsg != null && !successMsg.isEmpty()) { %>
         <div class="alert alert-success">
             <svg viewBox="0 0 24 24" fill="#00CE86">
@@ -728,7 +740,6 @@
         </div>
         <% } %>
 
-        <!-- ORDERS TABLE -->
         <div class="panel">
             <div class="panel-header">
                 <svg class="panel-title-icon" viewBox="0 0 24 24">
@@ -791,10 +802,10 @@
                                     onclick="toggleDetail('<%= oid %>')">
                                 Detalhe
                             </button>
-                            <a href="EditarEncomendaServlet?id=<%= oid %>"
+                            <a href="editarEncomenda.jsp?id=<%= oid %>"
                                class="btn-editar">Editar</a>
                             <% if (isPendente) { %>
-                            <a href="CancelarEncomendaServlet?id=<%= oid %>"
+                            <a href="cancelarEncomenda.jsp?id=<%= oid %>"
                                class="btn-cancelar"
                                onclick="return confirm('Cancelar encomenda #<%= oid %>?')">Cancelar</a>
                             <% } %>
@@ -807,7 +818,6 @@
             <% } %>
         </div>
 
-        <!-- DETAIL PANELS (one per order, shown/hidden by JS) -->
         <%
             for (String[] o : orders) {
                 String oid = o[0];

@@ -1,6 +1,7 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*" %>
-<%@ include file="basedados/basedados.h" %>
+<%@ page import="java.sql.*" %>
+<%@ include file="../basedados/basedados.h" %>
 <%
     // Session check
     HttpSession sessao = request.getSession(false);
@@ -345,7 +346,7 @@
                 <svg viewBox="0 0 24 24"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
                 Olá, <strong style="color:#e0e0e0;margin-left:4px;"><%= clienteName %></strong>
             </div>
-            <a href="LogoutServlet" class="btn-sair">Sair</a>
+            <a href="logout.jsp" class="btn-sair">Sair</a>
         </div>
     </nav>
 

@@ -4,15 +4,14 @@
 <%@ page import="java.sql.ResultSet" %>
 <%@ page import="java.sql.SQLException" %>
 <%!
-    private static final String DB_HOST   = "localhost";
-    private static final String DB_PORT   = "3306";
-    private static final String DB_NAME   = "felixubershop";
-    private static final String DB_USER   = "root";
-    private static final String DB_PASS   = "root";
+    private static final String DB_HOST = "localhost";
+    private static final String DB_PORT = "3306";
+    private static final String DB_NAME = "felixubershop";
+    private static final String DB_USER = "root";
+    private static final String DB_PASS = "root";
 
     private static final String DB_URL =
-        "jdbc:mysql://" + DB_HOST + ":" + DB_PORT + "/" + DB_NAME
-        + "?useSSL=false&serverTimezone=Europe/Lisbon&characterEncoding=UTF-8&allowPublicKeyRetrieval=true";
+        "jdbc:mysql://" + DB_HOST + ":" + DB_PORT + "/" + DB_NAME;
 
     private static final String DB_DRIVER = "com.mysql.cj.jdbc.Driver";
 

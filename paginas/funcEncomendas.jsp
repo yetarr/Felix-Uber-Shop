@@ -1,6 +1,7 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*" %>
-<%@ include file="basedados/basedados.h" %>
+<%@ page import="java.sql.*" %>
+<%@ include file="../basedados/basedados.h" %>
 <%
     HttpSession sess = request.getSession(false);
     if (sess == null || sess.getAttribute("userId") == null
@@ -763,7 +764,7 @@
             Olá, <strong style="color:#e0e0e0;margin-left:4px;"><%= funcName %>
         </strong>
         </div>
-        <a href="LogoutServlet" class="btn-sair">Sair</a>
+        <a href="logout.jsp" class="btn-sair">Sair</a>
     </div>
 </nav>
 

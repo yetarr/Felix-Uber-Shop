@@ -1,7 +1,8 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*, java.sql.*, java.security.MessageDigest, java.nio.charset.StandardCharsets" %>
-<%@ include file="basedados/basedados.h" %>
+<%@ include file="../basedados/basedados.h" %>
 <%!
+    // Hashing da password com o SHA256
     private String hashPassword(String plain) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
@@ -13,8 +14,11 @@
     }
 %>
 <%
+    // Verificacao de sessao
     HttpSession sess = request.getSession(false);
-    if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
+    if (sess == null || sess.getAttribute("userId") == null) {
+        response.sendRedirect("login.jsp"); return;
+    }
 
     String clienteName = (String) sess.getAttribute("userName");
     if (clienteName == null) clienteName = "Cliente";
@@ -23,10 +27,14 @@
     if (successMsg != null) sess.removeAttribute("success");
     String errorMsg = null;
 
+    // Operacao do request
     if ("POST".equalsIgnoreCase(request.getMethod())) {
         Integer userId = (Integer) sess.getAttribute("userId");
         String postAction = request.getParameter("action");
+
+        // Operacao de atualizar o perfil do utilizador
         if ("updateProfile".equals(postAction)) {
+            // Obtencao e validacao dos campos
             String nome = request.getParameter("nome");
             String email = request.getParameter("email");
             String telefone = request.getParameter("telefone");
@@ -34,45 +42,49 @@
                 errorMsg = "Nome e email são obrigatórios.";
             } else {
                 try {
+                    // Execucao do update
                     Connection conn = getConnection();
-                    PreparedStatement ps = conn.prepareStatement(
-                        "UPDATE utilizadores SET nome=?, email=?, telefone=? WHERE id_utilizador=?");
+                    String sql = "UPDATE utilizadores SET nome = ?, email = ?, telefone = ? WHERE id_utilizador = ?;";
+                    PreparedStatement ps = conn.prepareStatement(sql);
                     ps.setString(1, nome.trim()); ps.setString(2, email.trim());
                     ps.setString(3, telefone != null ? telefone.trim() : null); ps.setInt(4, userId);
-                    ps.executeUpdate(); closeAll(null, ps, conn);
+                    ps.executeUpdate();
                     sess.setAttribute("userName", nome.trim());
                     sess.setAttribute("userEmail", email.trim());
                     sess.setAttribute("success", "Perfil atualizado com sucesso.");
-                    response.sendRedirect("perfil.jsp"); return;
-                } catch (Exception e) { errorMsg = "Erro ao guardar: " + e.getMessage(); }
+
+                    ps.close(); conn.close();
+                    response.sendRedirect("perfil.jsp");  // Atualizar pagina
+                    return;
+                } catch (Exception e) {
+                    errorMsg = "Erro ao guardar: " + e.getMessage();
+                }
             }
-        } else if ("changePassword".equals(postAction)) {
-            String pwAtual = request.getParameter("password");
-            String pwNova  = request.getParameter("confirmPassword");
-            if (pwAtual == null || pwAtual.isBlank() || pwNova == null || pwNova.isBlank()) {
+        } else if ("changePassword".equals(postAction)) { // Operacao de mudar a password
+            // Obtencao e validacao da nova password
+            String passworNova = request.getParameter("password");
+            String passwordConfirm  = request.getParameter("confirmPassword");
+            if (passworNova == null || passworNova.isBlank() || passwordConfirm == null || passwordConfirm.isBlank()) {
                 errorMsg = "Preencha todos os campos de password.";
-            } else if (pwNova.length() < 6) {
+            } else if (passworNova.length() < 6) {
                 errorMsg = "A nova password deve ter mínimo 6 caracteres.";
             } else {
                 try {
+                    // Execucao do update
                     Connection conn = getConnection();
-                    PreparedStatement ps = conn.prepareStatement(
-                        "SELECT password_hash FROM utilizadores WHERE id_utilizador=?");
-                    ps.setInt(1, userId); ResultSet rs = ps.executeQuery();
-                    String storedHash = rs.next() ? rs.getString("password_hash") : "";
-                    rs.close(); ps.close();
-                    if (!hashPassword(pwAtual).equals(storedHash)) {
-                        errorMsg = "Password atual incorreta.";
-                        conn.close();
-                    } else {
-                        ps = conn.prepareStatement(
-                            "UPDATE utilizadores SET password_hash=? WHERE id_utilizador=?");
-                        ps.setString(1, hashPassword(pwNova)); ps.setInt(2, userId);
-                        ps.executeUpdate(); closeAll(null, ps, conn);
-                        sess.setAttribute("success", "Password alterada com sucesso.");
-                        response.sendRedirect("perfil.jsp"); return;
-                    }
-                } catch (Exception e) { errorMsg = "Erro ao alterar password: " + e.getMessage(); }
+                    String sql = "UPDATE utilizadores SET password_hash = ? WHERE id_utilizador = ?;";
+                    PreparedStatement ps = conn.prepareStatement(sql);
+                    ps.setString(1, hashPassword(passworNova)); ps.setInt(2, userId);
+                    ps.executeUpdate();
+
+                    sess.setAttribute("success", "Password alterada com sucesso.");
+
+                    ps.close(); conn.close();
+                    response.sendRedirect("perfil.jsp");  // Atualizar pagina
+                    return;
+                } catch (Exception e) {
+                    errorMsg = "Erro ao alterar password: " + e.getMessage();
+                }
             }
         }
     }
@@ -86,24 +98,25 @@
     String membroDesde = "";
 
     try {
+        // Execucao de Select para a obtencao dos dados do perfil do utilizador
         Connection conn = getConnection();
-
-        PreparedStatement ps = conn.prepareStatement(
-            "SELECT nome, email, telefone, data_registo, ativo FROM utilizadores WHERE id_utilizador = ?");
+        String sql = "SELECT nome, email, telefone, data_registo, ativo FROM utilizadores WHERE id_utilizador = ?";
+        PreparedStatement ps = conn.prepareStatement(sql);
         ps.setInt(1, (Integer) sess.getAttribute("userId"));
         ResultSet rs = ps.executeQuery();
         if (rs.next()) {
-            perfilNome     = rs.getString("nome");
-            perfilEmail    = rs.getString("email");
+            perfilNome = rs.getString("nome");
+            perfilEmail = rs.getString("email");
             perfilTelefone = rs.getString("telefone") != null ? rs.getString("telefone") : "";
-            estado         = rs.getBoolean("ativo") ? "Ativo" : "Inativo";
-            String dr      = rs.getString("data_registo");
-            membroDesde    = (dr != null && dr.length() >= 10) ? dr.substring(0, 10) : (dr != null ? dr : "");
+            estado = rs.getBoolean("ativo") ? "Ativo" : "Inativo";
+            String dr = rs.getString("data_registo");
+            membroDesde = (dr != null && dr.length() >= 10) ? dr.substring(0, 10) : (dr != null ? dr : "");
         }
         rs.close(); ps.close();
 
-        PreparedStatement ps2 = conn.prepareStatement(
-            "SELECT saldo FROM carteira WHERE id_utilizador = ?");
+        // Execucao de Select para obtencao do saldo do utilizador
+        String sql2 = "SELECT saldo FROM carteira WHERE id_utilizador = ?";
+        PreparedStatement ps2 = conn.prepareStatement(sql2);
         ps2.setInt(1, (Integer) sess.getAttribute("userId"));
         ResultSet rs2 = ps2.executeQuery();
         if (rs2.next()) {
@@ -112,16 +125,15 @@
         }
         rs2.close(); ps2.close();
 
-        PreparedStatement ps3 = conn.prepareStatement(
-            "SELECT COUNT(*) FROM encomenda WHERE id_utilizador = ?");
+        // Execucao de Select para obtencao do numero de encomendas do utilizador
+        String sql3 = "SELECT COUNT(*) FROM encomenda WHERE id_utilizador = ?";
+        PreparedStatement ps3 = conn.prepareStatement(sql3);
         ps3.setInt(1, (Integer) sess.getAttribute("userId"));
         ResultSet rs3 = ps3.executeQuery();
         if (rs3.next()) totalEnc = String.valueOf(rs3.getInt(1));
-        rs3.close(); ps3.close();
-
-        conn.close();
+        conn.close(); rs3.close(); ps3.close();
     } catch (Exception e) {
-        // page renders with defaults on error
+        // Ignorar excecao
     }
 
     String activePage = "perfil";
@@ -586,7 +598,6 @@
 </head>
 <body>
 
-<!-- TOP NAV -->
 <nav class="topnav">
     <a href="index.jsp" class="nav-brand">FelixUberShop</a>
     <div class="nav-right">
@@ -597,13 +608,12 @@
             Olá, <strong style="color:#e0e0e0;margin-left:4px;"><%= clienteName %>
         </strong>
         </div>
-        <a href="LogoutServlet" class="btn-sair">Sair</a>
+        <a href="logout.jsp" class="btn-sair">Sair</a>
     </div>
 </nav>
 
 <div class="app-shell">
 
-    <!-- SIDEBAR -->
     <aside class="sidebar">
         <div class="sidebar-label">Área Cliente</div>
         <ul class="sidebar-nav">
@@ -642,11 +652,9 @@
         </ul>
     </aside>
 
-    <!-- MAIN -->
     <main class="main-content">
         <h1 class="page-title">Perfil</h1>
 
-        <!-- Flash messages -->
         <% if (successMsg != null && !successMsg.isEmpty()) { %>
         <div class="alert alert-success">
             <svg viewBox="0 0 24 24" fill="#00CE86">
@@ -665,10 +673,8 @@
         </div>
         <% } %>
 
-        <!-- TOP ROW: Edit form + Account summary -->
         <div class="profile-row">
 
-            <!-- ── DADOS PESSOAIS FORM ───────────────────── -->
             <div class="panel">
                 <div class="panel-header">
                     <svg class="panel-title-icon" viewBox="0 0 24 24">
@@ -680,7 +686,6 @@
                     <form action="perfil.jsp" method="post" autocomplete="off">
                         <input type="hidden" name="action" value="updateProfile"/>
 
-                        <!-- Nome -->
                         <div class="form-group">
                             <label for="nome">Nome completo <span class="req">*</span></label>
                             <div class="input-wrap">
@@ -693,7 +698,6 @@
                             </div>
                         </div>
 
-                        <!-- Email -->
                         <div class="form-group">
                             <label for="email">Email <span class="req">*</span></label>
                             <div class="input-wrap">
@@ -706,7 +710,6 @@
                             </div>
                         </div>
 
-                        <!-- Telefone -->
                         <div class="form-group">
                             <label for="telefone">Telefone</label>
                             <div class="input-wrap">
@@ -727,7 +730,6 @@
                 </div>
             </div>
 
-            <!-- ── ACCOUNT SUMMARY ───────────────────────── -->
             <div class="panel">
                 <div class="panel-header">
                     <svg class="panel-title-icon" viewBox="0 0 24 24">
@@ -771,9 +773,8 @@
                 </ul>
             </div>
 
-        </div><!-- end profile-row -->
+        </div>
 
-        <!-- ── SECURITY SECTION ──────────────────────────── -->
         <div class="panel">
             <div class="panel-header">
                 <svg class="panel-title-icon" viewBox="0 0 24 24">
@@ -783,7 +784,6 @@
             </div>
             <div class="panel-body">
 
-                <!-- Last login info -->
                 <div class="security-meta">
                     <svg viewBox="0 0 24 24">
                         <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/>
@@ -791,13 +791,11 @@
                     Último login: <strong>—</strong>
                 </div>
 
-                <!-- Change password form -->
                 <form action="perfil.jsp" method="post" autocomplete="off"
                       onsubmit="return validatePw()">
                     <input type="hidden" name="action" value="changePassword"/>
 
                     <div class="row-2">
-                        <!-- New password -->
                         <div class="form-group">
                             <label for="password">Nova password <span class="req">*</span></label>
                             <div class="input-wrap">
@@ -817,7 +815,6 @@
                             <p class="hint">Mínimo 6 caracteres</p>
                         </div>
 
-                        <!-- Confirm password -->
                         <div class="form-group">
                             <label for="confirmPassword">Confirmar password <span class="req">*</span></label>
                             <div class="input-wrap">

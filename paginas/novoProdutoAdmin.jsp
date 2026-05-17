@@ -1,6 +1,7 @@
 ﻿<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
+<%@ page import="java.util.*" %>
 <%@ page import="java.sql.*" %>
-<%@ include file="basedados/basedados.h" %>
+<%@ include file="../basedados/basedados.h" %>
 <%
     HttpSession sess = request.getSession(false);
     if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }

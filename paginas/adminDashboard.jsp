@@ -1,6 +1,7 @@
 ﻿<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*" %>
-<%@ include file="basedados/basedados.h" %>
+<%@ page import="java.sql.*" %>
+<%@ include file="../basedados/basedados.h" %>
 <%
     // Verificar sessao
     HttpSession sess = request.getSession(false);
@@ -9,6 +10,7 @@
         return;
     }
     if (!"administrador".equals(sess.getAttribute("userRole"))) {
+        response.sendRedirect("dashboard.jsp");
         response.sendRedirect("dashboard.jsp");
         return;
     }

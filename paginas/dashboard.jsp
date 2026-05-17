@@ -1,6 +1,7 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*" %>
-<%@ include file="basedados/basedados.h" %>
+<%@ page import="java.sql.*" %>
+<%@ include file="../basedados/basedados.h" %>
 <%
     String clientId = "";
     String clienteName = "";
@@ -15,11 +16,16 @@
     int pendentes = 0;
     int confirmadas = 0;
 
+    // Verificacao da sessao
     HttpSession sess = request.getSession(false);
     if (sess != null) {
+        String role = (String) sess.getAttribute("userRole");
+        if(!role.equals("cliente")){
+            response.sendRedirect("login.jsp");
+        }
+
         clientId = String.valueOf(sess.getAttribute("userId"));
         clienteName = (String) sess.getAttribute("userName");
-        saldoDisp = String.valueOf(sess.getAttribute("userSaldo"));
 
         try {
             // Obter encomendas da base de dados
@@ -69,7 +75,7 @@
             rs.close(); ps.close();
 
             // Obter movimentos da carteira
-            sql = "SELECT a.* " +
+            sql = "SELECT a.*, c.saldo " +
                     "FROM auditoria_carteira a " +
                     "LEFT JOIN carteira c " +
                     "ON c.id_carteira = a.id_carteira_origem " +
@@ -82,13 +88,14 @@
             rs = ps.executeQuery();
 
             while (rs.next()) {
-                String id = (rs.getString("id_log"));
-                String id_carteira_origem = (rs.getString("id_carteira_origem"));
-                String id_carteira_destino = (rs.getString("id_carteira_destino"));
-                String valor = (rs.getString("valor"));
-                String descricao = (rs.getString("descricao"));
-                String tipo_operacao = (rs.getString("tipo_operacao"));
-                String data_operacao = (rs.getString("data_operacao"));
+                String id = rs.getString("id_log");
+                String id_carteira_origem = rs.getString("id_carteira_origem");
+                String id_carteira_destino = rs.getString("id_carteira_destino");
+                String valor = rs.getString("valor");
+                String descricao = rs.getString("descricao");
+                String tipo_operacao = rs.getString("tipo_operacao");
+                String data_operacao = rs.getString("data_operacao");
+                saldoDisp = rs.getString("saldo");
 
                 if (tipo_operacao.equals("pagamento")){
                     valor = "-" + valor;
@@ -631,7 +638,7 @@
             Olá, <strong style="color:#e0e0e0;margin-left:4px;"><%= clienteName %>
         </strong>
         </div>
-        <a href="LogoutServlet" class="btn-sair">Sair</a>
+        <a href="logout.jsp" class="btn-sair">Sair</a>
     </div>
 </nav>
 
