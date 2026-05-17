@@ -14,6 +14,7 @@
     }
 %>
 <%
+    // Verificacao da sessao e papel de administrador
     HttpSession sess = request.getSession(false);
     if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
     if (!"administrador".equalsIgnoreCase((String) sess.getAttribute("userRole"))) { response.sendRedirect("dashboard.jsp"); return; }
@@ -23,9 +24,11 @@
     String successMsg = (String) sess.getAttribute("success"); if (successMsg != null) sess.removeAttribute("success");
     String errorMsg = null;
 
+    // Processar criacao ou edicao de utilizador
     if ("POST".equalsIgnoreCase(request.getMethod())) {
         String postAction = request.getParameter("action");
 
+        // Guardar dados do utilizador (novo ou edicao)
         if ("guardar".equals(postAction)) {
             String userId = request.getParameter("userId");
             String nome = request.getParameter("nome");

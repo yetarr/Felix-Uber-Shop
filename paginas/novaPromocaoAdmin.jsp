@@ -3,6 +3,7 @@
 <%@ page import="java.sql.*" %>
 <%@ include file="../basedados/basedados.h" %>
 <%
+    // Verificacao da sessao e perfil de administrador
     HttpSession sess = request.getSession(false);
     if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
     if (!"administrador".equals(sess.getAttribute("userRole"))) { response.sendRedirect("adminDashboard.jsp"); return; }
@@ -12,6 +13,7 @@
 
     String errorMsg = null;
 
+    // Processar submissao do formulario de nova promocao
     if ("POST".equalsIgnoreCase(request.getMethod())) {
         String titulo      = request.getParameter("titulo");
         String descontoStr = request.getParameter("desconto");
@@ -55,6 +57,7 @@
         }
     }
 
+    // Carregar catalogo de produtos ativos disponiveis
     List<Object[]> catalogue = new ArrayList<>();
     Connection _conn = null; PreparedStatement _ps = null; ResultSet _rs = null;
     try {
@@ -214,7 +217,7 @@
     <main class="main-content">
         <div class="page-grid">
 
-            <!-- LEFT: FORM -->
+            <!-- Formulario de nova promocao -->
             <div class="panel">
                 <div class="panel-header">
                     <svg class="panel-title" viewBox="0 0 24 24" style="fill:#00CE86;width:17px;height:17px;flex-shrink:0;">

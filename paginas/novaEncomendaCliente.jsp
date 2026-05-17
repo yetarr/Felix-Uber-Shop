@@ -3,7 +3,7 @@
 <%@ page import="java.sql.*" %>
 <%@ include file="../basedados/basedados.h" %>
 <%
-    // Verificar Sessao
+    // Verificacao da sessao do utilizador
     HttpSession sess = request.getSession(false);
     if (sess == null || sess.getAttribute("userId") == null) {
         response.sendRedirect("login.jsp");
@@ -16,6 +16,7 @@
     List<Object[]> catalogue = new ArrayList<>();
     String errorMsg = null;
 
+    // Processar submissao da nova encomenda pelo cliente
     if ("POST".equalsIgnoreCase(request.getMethod())) {
         Connection conn = null;
         PreparedStatement ps = null;
@@ -127,6 +128,7 @@
         }
     }
 
+    // Carregar saldo e catalogo de produtos ativos com promocoes
     Connection conn = null;
     PreparedStatement ps = null;
     ResultSet rs = null;
@@ -170,7 +172,7 @@
             });
         }
     } catch (Exception e) {
-        // page renders with empty catalogue on error
+        // Catalogo fica vazio em caso de erro
     } finally {
         closeAll(rs, ps, conn);
     }

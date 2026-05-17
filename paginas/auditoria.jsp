@@ -3,13 +3,14 @@
 <%@ page import="java.sql.*" %>
 <%@ include file="../basedados/basedados.h" %>
 <%
-    // Session check
+    // Verificacao da sessao e permissao de funcionario
     if (session.getAttribute("userId") == null || !"funcionario".equals(session.getAttribute("userRole"))) {
         response.sendRedirect("login.jsp");
         return;
     }
     String funcName = (String) session.getAttribute("userName");
 
+    // Carregar movimentos de carteira para a lista de logs
     List<String[]> logs = new ArrayList<>();
 
     Connection _conn7 = null;
@@ -42,11 +43,12 @@
             });
         }
     } catch (Exception _e7) {
-        // page renders with empty logs on error
+        // Lista fica vazia em caso de erro
     } finally {
         closeAll(_rs7, _ps7, _conn7);
     }
 
+    // Contagem por categoria para os separadores
     Map<String, Integer> tabCounts = new LinkedHashMap<>();
     tabCounts.put("Carteira", logs.size());
     tabCounts.put("Utilizador", 0);
@@ -54,6 +56,7 @@
     tabCounts.put("Encomenda", 0);
     tabCounts.put("Promoção", 0);
 
+    // Parametros de filtro e ordenacao
     String activeTab = request.getParameter("tab") != null ? request.getParameter("tab") : "";
     String filterSearch = request.getParameter("search") != null ? request.getParameter("search") : "";
     String filterCat = request.getParameter("categoria") != null ? request.getParameter("categoria") : "";
@@ -770,6 +773,7 @@
                 </thead>
                 <tbody id="auditBody">
                 <%
+                    // Renderizar cada linha da tabela de auditoria
                     for (String[] l : logs) {
                         String ldate = l[0], lcat = l[1], lact = l[2], luser = l[3], ldet = l[4], lval = l[5];
                         String cc = "c-enc", ci = "M20 6h-2.18A3 3 0 0 0 15 4H9a3 3 0 0 0-2.82 2H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-11 0h6c.55 0 1 .45 1 1s-.45 1-1 1H9c-.55 0-1-.45-1-1s.45-1 1-1z";

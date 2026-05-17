@@ -3,7 +3,7 @@
 <%@ page import="java.sql.*" %>
 <%@ include file="../basedados/basedados.h" %>
 <%
-    // Session check
+    // Verificacao da sessao e papel de funcionario
     if (session.getAttribute("userId") == null || !"funcionario".equals(session.getAttribute("userRole"))) {
         response.sendRedirect("login.jsp");
         return;
@@ -24,7 +24,7 @@
     try {
         _conn3 = getConnection();
 
-        // Counts
+        // Contagens estatisticas para o dashboard
         _ps3 = _conn3.prepareStatement("SELECT COUNT(*) FROM encomenda WHERE estado='pendente'");
         _rs3 = _ps3.executeQuery();
         if (_rs3.next()) encPendentes = _rs3.getInt(1);
@@ -50,7 +50,7 @@
         if (_rs3.next()) clientesRegistados = _rs3.getInt(1);
         closeAll(_rs3, _ps3, null);
 
-        // Recent orders
+        // Ultimas encomendas para o feed
         _ps3 = _conn3.prepareStatement(
             "SELECT e.id_encomenda, u.nome, e.data_encomenda, e.total, e.estado " +
             "FROM encomenda e JOIN utilizadores u ON u.id_utilizador=e.id_utilizador " +
@@ -68,7 +68,7 @@
         }
         closeAll(_rs3, _ps3, null);
 
-        // Wallet feed
+        // Movimentos recentes da carteira
         _ps3 = _conn3.prepareStatement(
             "SELECT ac.tipo_operacao, e.codigo_unico, u.nome, ac.data_operacao, ac.valor, ac.id_carteira_origem " +
             "FROM auditoria_carteira ac " +
@@ -91,7 +91,7 @@
             walletFeed.add(new String[]{tipo, codigo, nome, dataOp, valorFmt});
         }
     } catch (Exception _e3) {
-        // page renders with empty/zero data on error
+        // Pagina carrega com dados vazios em caso de erro
     } finally {
         closeAll(_rs3, _ps3, _conn3);
     }

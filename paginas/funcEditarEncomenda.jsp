@@ -3,13 +3,14 @@
 <%@ page import="java.sql.*" %>
 <%@ include file="../basedados/basedados.h" %>
 <%
-    // Session check
+    // Verificacao da sessao e papel de funcionario
     if (session.getAttribute("userId") == null || !"funcionario".equals(session.getAttribute("userRole"))) {
         response.sendRedirect("login.jsp");
         return;
     }
     String funcName = (String) session.getAttribute("userName");
 
+    // Processar acao de validar ou cancelar a encomenda
     if ("POST".equalsIgnoreCase(request.getMethod())) {
         String _action = request.getParameter("action");
         String _eid    = request.getParameter("id");
@@ -44,6 +45,7 @@
         }
     }
 
+    // Obter o id da encomenda da URL
     String orderId = request.getParameter("id") != null ? request.getParameter("id") : "8";
 
     String orderCliente = "";
@@ -53,6 +55,7 @@
     int    clientUserId = 0;
     List<Object[]> catalogue = new ArrayList<>();
 
+    // Carregar dados da encomenda e catalogo de produtos
     Connection _conn5 = null;
     PreparedStatement _ps5 = null;
     ResultSet _rs5 = null;
@@ -61,7 +64,7 @@
         int orderIdInt = 0;
         try { orderIdInt = Integer.parseInt(orderId); } catch (Exception _ex5) {}
 
-        // Order details + client
+        // detalhes da encomenda + clientes
         _ps5 = _conn5.prepareStatement(
             "SELECT e.estado, e.data_encomenda, u.nome, u.id_utilizador " +
             "FROM encomenda e JOIN utilizadores u ON u.id_utilizador=e.id_utilizador " +
@@ -76,7 +79,7 @@
         }
         closeAll(_rs5, _ps5, null);
 
-        // Client wallet balance
+        // saldo da carteira do cliente
         if (clientUserId > 0) {
             _ps5 = _conn5.prepareStatement("SELECT saldo FROM carteira WHERE id_utilizador=?");
             _ps5.setInt(1, clientUserId);
@@ -87,7 +90,6 @@
             closeAll(_rs5, _ps5, null);
         }
 
-        // Catalogue with current order quantities
         _ps5 = _conn5.prepareStatement(
             "SELECT p.id_produto, p.nome, p.categoria, CAST(p.preco*100 AS SIGNED) as preco_cents, " +
             "0 as desconto, COALESCE(ep.quantidade,0) as qty_atual, CAST(p.preco*100 AS SIGNED) as preco_orig " +
@@ -108,7 +110,6 @@
             });
         }
     } catch (Exception _e5) {
-        // page renders with empty data on error
     } finally {
         closeAll(_rs5, _ps5, _conn5);
     }

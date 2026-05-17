@@ -3,6 +3,7 @@
 <%@ page import="java.sql.*" %>
 <%@ include file="../basedados/basedados.h" %>
 <%
+    // Verificacao da sessao e papel de administrador
     HttpSession sess = request.getSession(false);
     if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
     if (!"administrador".equals(sess.getAttribute("userRole"))) { response.sendRedirect("dashboard.jsp"); return; }
@@ -22,7 +23,7 @@
     try {
         _conn8 = getConnection();
 
-        // Stats
+        // Contagem de eventos por categoria
         _ps8 = _conn8.prepareStatement("SELECT COUNT(*) FROM auditoria_carteira");
         _rs8 = _ps8.executeQuery();
         if (_rs8.next()) statCarteira = _rs8.getInt(1);
@@ -48,7 +49,7 @@
         if (_rs8.next()) statPromocao = _rs8.getInt(1);
         closeAll(_rs8, _ps8, null);
 
-        // Query 1: wallet movements
+        // Consulta 1: movimentos da carteira
         _ps8 = _conn8.prepareStatement(
             "SELECT ac.data_operacao, ac.tipo_operacao, COALESCE(u.nome,'') as uname, " +
             "COALESCE(ac.descricao,'') as det, ac.valor " +
@@ -74,7 +75,7 @@
         }
         closeAll(_rs8, _ps8, null);
 
-        // Query 2: general audit events
+        // Consulta 2: eventos gerais de auditoria
         _ps8 = _conn8.prepareStatement(
             "SELECT a.data_evento, a.categoria, a.acao, " +
             "COALESCE(u.nome,'Sistema') as uname, COALESCE(a.descricao,'') as det " +
@@ -94,14 +95,12 @@
         }
         closeAll(_rs8, _ps8, null);
 
-        // Sort combined list by date descending
         java.util.Collections.sort(logs, new java.util.Comparator<String[]>() {
             public int compare(String[] a, String[] b) {
                 return b[0].compareTo(a[0]);
             }
         });
     } catch (Exception _e8) {
-        // page renders with empty/zero data on error
     } finally {
         closeAll(_rs8, _ps8, _conn8);
     }
@@ -524,14 +523,14 @@
                         String lDetalhe = log[4];
                         String lValor   = log[5];
 
-                        // Badge CSS class
+                        // Classe de estilo do badge por categoria
                         String badgeClass = "cat-carteira";
                         if      ("Utilizador".equals(lCat)) badgeClass = "cat-utilizador";
                         else if ("Produto".equals(lCat))    badgeClass = "cat-produto";
                         else if ("Encomenda".equals(lCat))  badgeClass = "cat-encomenda";
                         else if ("Promoção".equals(lCat))   badgeClass = "cat-promocao";
 
-                        // Valor CSS class
+                        // Classe de estilo do valor monetario
                         String valorClass = "valor-dash";
                         String valorDisplay = "&mdash;";
                         if (!lValor.isEmpty()) {
@@ -541,7 +540,7 @@
                             else                             valorClass = "valor-neu";
                         }
 
-                        // data-valor for sort (strip symbols, use 0 if dash)
+                        // Valor numerico para ordenacao da tabela
                         String valorNum = "0";
                         if (!lValor.isEmpty()) {
                             valorNum = lValor.replaceAll("[^0-9,\\-\\+]","").replace(",",".");

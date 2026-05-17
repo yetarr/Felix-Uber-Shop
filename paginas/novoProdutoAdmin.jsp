@@ -3,6 +3,7 @@
 <%@ page import="java.sql.*" %>
 <%@ include file="../basedados/basedados.h" %>
 <%
+    // Verificacao da sessao e papel de administrador
     HttpSession sess = request.getSession(false);
     if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
     if (!"administrador".equals(sess.getAttribute("userRole"))) { response.sendRedirect("dashboard.jsp"); return; }
@@ -15,6 +16,7 @@
     if (successMsg != null) sess.removeAttribute("success");
     String errorMsg = null;
 
+    // Processar submissao do formulario de novo produto
     if ("POST".equalsIgnoreCase(request.getMethod())) {
         String nome = request.getParameter("nome");
         String descricao = request.getParameter("descricao");
@@ -24,6 +26,7 @@
         if (nome == null || nome.isBlank() || precoStr == null || precoStr.isBlank()) {
             errorMsg = "Nome e preço são obrigatórios.";
         } else {
+            // Inserir novo produto na base de dados
             try {
                 double preco = Double.parseDouble(precoStr.replace(",", "."));
                 int stock = stockStr != null && !stockStr.isBlank() ? Integer.parseInt(stockStr) : 0;

@@ -13,6 +13,7 @@
     }
 %>
 <%
+    // Verificacao da sessao e papel de administrador
     HttpSession sess = request.getSession(false);
     if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
     if (!"administrador".equals(sess.getAttribute("userRole"))) { response.sendRedirect("dashboard.jsp"); return; }
@@ -25,6 +26,7 @@
     if (successMsg != null) sess.removeAttribute("success");
     String errorMsg = null;
 
+    // Processar registo de novo utilizador
     if ("POST".equalsIgnoreCase(request.getMethod())) {
         String nome = request.getParameter("nome");
         String email = request.getParameter("email");
@@ -32,7 +34,7 @@
         String pw = request.getParameter("password");
         String pwConf = request.getParameter("passwordConfirm");
         String perfilRaw = request.getParameter("perfil");
-        // Map display value to DB enum
+        // Mapear valor do formulario para o perfil da base de dados
         String perfil = "cliente";
         if ("Funcionário".equalsIgnoreCase(perfilRaw) || "funcionario".equalsIgnoreCase(perfilRaw)) perfil = "funcionario";
         else if ("Admin".equalsIgnoreCase(perfilRaw) || "administrador".equalsIgnoreCase(perfilRaw)) perfil = "administrador";
@@ -46,7 +48,7 @@
         } else {
             try {
                 Connection conn = getConnection();
-                // Check email duplicate
+                // Verificar se o email ja esta registado
                 PreparedStatement ps = conn.prepareStatement("SELECT id_utilizador FROM utilizadores WHERE email=?");
                 ps.setString(1, email.trim()); ResultSet rs = ps.executeQuery();
                 if (rs.next()) { errorMsg = "Este email já está registado."; rs.close(); ps.close(); conn.close(); }
@@ -59,10 +61,10 @@
                     ps.setString(3, telefone != null ? telefone.trim() : null);
                     ps.setString(4, hashPassword(pw)); ps.setString(5, perfil);
                     ps.executeUpdate();
-                    // Get new id
+                    // Obter o id do novo utilizador
                     ResultSet keys = ps.getGeneratedKeys();
                     int newId = keys.next() ? keys.getInt(1) : -1; keys.close(); ps.close();
-                    // Create carteira
+                    // Criar carteira para o novo utilizador
                     if (newId > 0) {
                         ps = conn.prepareStatement("INSERT INTO carteira (id_utilizador, saldo, is_loja) VALUES (?,0,0)");
                         ps.setInt(1, newId); ps.executeUpdate(); ps.close();

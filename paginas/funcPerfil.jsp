@@ -13,6 +13,7 @@
     }
 %>
 <%
+    // Verificacao da sessao e perfil de funcionario
     HttpSession sess = request.getSession(false);
     if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
     if (!"funcionario".equals(sess.getAttribute("userRole"))) { response.sendRedirect("login.jsp"); return; }
@@ -24,6 +25,7 @@
     if (successMsg != null) sess.removeAttribute("success");
     String errorMsg = null;
 
+    // Processar submissao do formulario de perfil
     if ("POST".equalsIgnoreCase(request.getMethod())) {
         Integer userId = (Integer) sess.getAttribute("userId");
         String postAction = request.getParameter("action");
@@ -85,6 +87,7 @@
     String encomendasValidadas = "0";
     String membroDesde = "";
 
+    // Carregar dados do perfil da base de dados
     try {
         Connection conn = getConnection();
 
@@ -102,6 +105,7 @@
         }
         rs.close(); ps.close();
 
+        // Contar encomendas do sistema para o resumo
         PreparedStatement ps2 = conn.prepareStatement("SELECT COUNT(*) FROM encomenda");
         ResultSet rs2 = ps2.executeQuery();
         if (rs2.next()) encomendasValidadas = String.valueOf(rs2.getInt(1));
@@ -109,7 +113,7 @@
 
         conn.close();
     } catch (Exception e) {
-        // page renders with defaults on error
+        // Perfil fica com valores predefinidos em caso de erro
     }
 
     String activePage = "perfil";

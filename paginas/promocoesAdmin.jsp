@@ -14,6 +14,7 @@
     }
 %>
 <%
+    // Verificacao da sessao e papel de administrador
     HttpSession sess = request.getSession(false);
     if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
     if (!"administrador".equals(sess.getAttribute("userRole"))) { response.sendRedirect("dashboard.jsp"); return; }
@@ -23,6 +24,7 @@
     String successMsg = (String) sess.getAttribute("success"); if (successMsg != null) sess.removeAttribute("success");
     String errorMsg = null;
 
+    // Processar formulario de guardar ou editar promocao
     if ("POST".equalsIgnoreCase(request.getMethod())) {
         String postAction = request.getParameter("action");
 
@@ -96,7 +98,7 @@
     ResultSet _rs2 = null;
     try {
         _conn2 = getConnection();
-        // Load promos
+        // Carregar lista de todas as promocoes
         _ps2 = _conn2.prepareStatement(
             "SELECT id_promocao, titulo, desconto_percentagem, data_inicio, data_fim, ativo " +
             "FROM promocoes ORDER BY id_promocao");
@@ -112,7 +114,7 @@
             });
         }
         closeAll(_rs2, _ps2, null);
-        // Load catalogue
+        // Carregar catalogo de produtos ativos
         _ps2 = _conn2.prepareStatement(
             "SELECT id_produto, nome, CAST(preco*100 AS SIGNED) as preco_cents " +
             "FROM produtos WHERE ativo=1 ORDER BY nome");
@@ -125,7 +127,7 @@
             });
         }
     } catch (Exception _e2) {
-        // page renders with empty lists
+        // Listas ficam vazias em caso de erro
     } finally {
         closeAll(_rs2, _ps2, _conn2);
     }
@@ -151,7 +153,7 @@
         }
     }
 
-    // Load product ids for selected promo
+    // Carregar produtos associados a promocao selecionada
     Set<String> selProds = new HashSet<>();
     if (!selectedId.isEmpty()) {
         Connection _conn2b = null;
@@ -167,7 +169,7 @@
                 selProds.add(String.valueOf(_rs2b.getInt("id_produto")));
             }
         } catch (Exception _e2b) {
-            // empty selProds on error
+            // Lista de produtos fica vazia em caso de erro
         } finally {
             closeAll(_rs2b, _ps2b, _conn2b);
         }

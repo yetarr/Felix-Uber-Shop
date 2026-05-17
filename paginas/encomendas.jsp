@@ -53,6 +53,7 @@
         rs.close(); ps.close();
         rs = null; ps = null;
 
+        // Abrir o detalhe da primeira encomenda por defeito
         if (openDetail == null && !orders.isEmpty()) openDetail = orders.get(0)[0];
 
         // Obter itens de todas as encomendas

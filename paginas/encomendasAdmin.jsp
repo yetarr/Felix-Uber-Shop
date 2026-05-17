@@ -3,12 +3,14 @@
 <%@ page import="java.sql.*" %>
 <%@ include file="../basedados/basedados.h" %>
 <%
+    // Verificacao da sessao e papel de administrador
     HttpSession sess = request.getSession(false);
     if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
     if (!"administrador".equalsIgnoreCase((String) sess.getAttribute("userRole"))) { response.sendRedirect("dashboard.jsp"); return; }
 
     String adminName = (String) sess.getAttribute("userName");
 
+    // Acao de validar encomenda como pronta
     if ("POST".equalsIgnoreCase(request.getMethod()) && "validar".equals(request.getParameter("action"))) {
         String eid = request.getParameter("id");
         try {
@@ -25,6 +27,7 @@
         response.sendRedirect("encomendasAdmin.jsp"); return;
     }
 
+    // Acao de cancelar encomenda pelo administrador
     if ("POST".equalsIgnoreCase(request.getMethod()) && "cancelar".equals(request.getParameter("action"))) {
         String eid = request.getParameter("id");
         try {
@@ -41,10 +44,12 @@
         response.sendRedirect("encomendasAdmin.jsp"); return;
     }
 
+    // Parametros de filtro para a listagem
     String filterCliente = request.getParameter("cliente") != null ? request.getParameter("cliente") : "";
     String filterEstado  = request.getParameter("estado")  != null ? request.getParameter("estado")  : "";
     String filterData    = request.getParameter("data")    != null ? request.getParameter("data")    : "2026-05-04";
 
+    // Listas de encomendas e respetivos detalhes de itens
     List<String[]> allOrders = new ArrayList<>();
     Map<String, String[][]> details = new LinkedHashMap<>();
 
@@ -59,7 +64,7 @@
     try {
         conn = getConnection();
 
-        // Load all orders with optional filters
+        // Carregar todas as encomendas com filtros opcionais
         String sql = "SELECT e.id_encomenda, u.nome, e.data_encomenda, e.total, e.estado " +
                      "FROM encomenda e JOIN utilizadores u ON u.id_utilizador = e.id_utilizador " +
                      "WHERE (u.nome LIKE ? OR ? = '') " +
@@ -83,10 +88,10 @@
         closeAll(rs, ps, null);
         rs = null; ps = null;
 
-        // Determine which order detail to open
+        // Determinar qual encomenda abrir por defeito
         if (openDetail == null && !allOrders.isEmpty()) openDetail = allOrders.get(0)[0];
 
-        // Load items for the open order only
+        // Carregar itens da encomenda aberta
         if (openDetail != null && !openDetail.isEmpty()) {
             String sqlItems = "SELECT p.nome, ep.preco_unitario, ep.quantidade " +
                               "FROM encomenda_produto ep JOIN produtos p ON p.id_produto = ep.id_produto " +
@@ -106,7 +111,7 @@
             details.put(openDetail, itemsList.toArray(new String[0][]));
         }
     } catch (Exception e) {
-        // Page renders with empty lists on error
+        // Listas ficam vazias em caso de erro
     } finally {
         closeAll(rs, ps, conn);
     }

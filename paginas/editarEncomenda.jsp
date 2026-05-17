@@ -3,6 +3,7 @@
 <%@ page import="java.sql.*" %>
 <%@ include file="../basedados/basedados.h" %>
 <%
+    // Verificacao da sessao
     if (session.getAttribute("userId") == null) {
         response.sendRedirect("login.jsp");
         return;
@@ -17,6 +18,7 @@
     if (successMsg != null) session.removeAttribute("success");
     String errorMsg = null;
 
+    // Processar atualizacao dos itens da encomenda
     if ("POST".equalsIgnoreCase(request.getMethod())) {
         Connection uConn = null;
         PreparedStatement uPs = null;
@@ -132,6 +134,7 @@
     try {
         conn = getConnection();
 
+        // Verificar estado da encomenda
         ps = conn.prepareStatement(
             "SELECT estado FROM encomenda WHERE id_encomenda = ? AND id_utilizador = ?");
         ps.setInt(1, orderIdInt);
@@ -143,6 +146,7 @@
         }
         closeAll(rs, ps, null);
 
+        // Obter saldo do cliente
         ps = conn.prepareStatement("SELECT saldo FROM carteira WHERE id_utilizador = ?");
         ps.setInt(1, userId);
         rs = ps.executeQuery();
@@ -151,6 +155,7 @@
         }
         closeAll(rs, ps, null);
 
+        // Carregar catalogo de produtos disponiveis com descontos
         ps = conn.prepareStatement(
             "SELECT p.id_produto, p.nome, p.categoria, " +
             "CAST(p.preco*100 AS SIGNED) AS preco_orig_cents, " +
@@ -183,7 +188,7 @@
             });
         }
     } catch (Exception e) {
-        // page renders with empty catalogue on error
+        // Catalogo fica vazio em caso de erro
     } finally {
         closeAll(rs, ps, conn);
     }

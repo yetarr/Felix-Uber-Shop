@@ -2,6 +2,7 @@
 <%@ page import="java.util.*" %>
 <%@ include file="../basedados/basedados.h" %>
 <%
+    // Verificacao da sessao e perfil de administrador
     HttpSession sess = request.getSession(false);
     if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
     if (!"administrador".equalsIgnoreCase((String) sess.getAttribute("userRole"))) { response.sendRedirect("dashboard.jsp"); return; }
@@ -11,6 +12,7 @@
     if (successMsg != null) sess.removeAttribute("success");
     String errorMsg = null;
 
+    // Processar operacao de saldo pelo administrador
     if ("POST".equalsIgnoreCase(request.getMethod())) {
         String acao = request.getParameter("action");
         String clienteIdStr = request.getParameter("clienteId");
@@ -53,6 +55,7 @@
         } catch (Exception e) { errorMsg = e.getMessage(); }
     }
 
+    // Carregar lista de clientes ativos com saldo
     List<Object[]> clients = new ArrayList<>();
 
     Connection conn = null;

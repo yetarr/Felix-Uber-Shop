@@ -13,6 +13,7 @@
     }
 %>
 <%
+    // Verificacao da sessao e perfil de administrador
     HttpSession sess = request.getSession(false);
     if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
     if (!"administrador".equals(sess.getAttribute("userRole"))) { response.sendRedirect("dashboard.jsp"); return; }
@@ -27,6 +28,7 @@
     if (successMsg != null) sess.removeAttribute("success");
     String errorMsg = null;
 
+    // Processar actualizacao do perfil do administrador
     if ("POST".equalsIgnoreCase(request.getMethod())) {
         String postAction = request.getParameter("action");
         if ("guardar".equals(postAction)) {
@@ -70,6 +72,7 @@
     int    produtosGeridos     = 0;
     String membroDesde         = "";
 
+    // Carregar dados do perfil do administrador
     try {
         Connection conn = getConnection();
 
@@ -86,6 +89,7 @@
         }
         rs.close(); ps.close();
 
+        // Contar utilizadores e produtos geridos para o resumo
         PreparedStatement ps2 = conn.prepareStatement(
             "SELECT COUNT(*) FROM utilizadores WHERE perfil != 'administrador'");
         ResultSet rs2 = ps2.executeQuery();
@@ -100,7 +104,7 @@
 
         conn.close();
     } catch (Exception e) {
-        // page renders with defaults on error
+        // Perfil carrega com valores predefinidos em caso de erro
     }
 %>
 <!DOCTYPE html>

@@ -3,6 +3,7 @@
 <%@ page import="java.sql.*" %>
 <%@ include file="../basedados/basedados.h" %>
 <%
+    // Verificacao da sessao e papel de administrador
     HttpSession sess = request.getSession(false);
     if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
     if (!"administrador".equals(sess.getAttribute("userRole"))) { response.sendRedirect("dashboard.jsp"); return; }
@@ -29,7 +30,7 @@
         }
 
         if (!isNova && orderIdInt > 0) {
-            // Order details + client
+            // Detalhes do pedido + cliente
             _ps6 = _conn6.prepareStatement(
                 "SELECT e.estado, e.data_encomenda, u.nome, u.id_utilizador " +
                 "FROM encomenda e JOIN utilizadores u ON u.id_utilizador=e.id_utilizador " +
@@ -44,7 +45,7 @@
             }
             closeAll(_rs6, _ps6, null);
 
-            // Client wallet balance
+            // Saldo da carteira do cliente
             if (clientUserId > 0) {
                 _ps6 = _conn6.prepareStatement("SELECT saldo FROM carteira WHERE id_utilizador=?");
                 _ps6.setInt(1, clientUserId);
@@ -56,7 +57,6 @@
             }
         }
 
-        // Catalogue with current order quantities
         _ps6 = _conn6.prepareStatement(
             "SELECT p.id_produto, p.nome, p.categoria, CAST(p.preco*100 AS SIGNED) as preco_cents, " +
             "0 as desconto, COALESCE(ep.quantidade,0) as qty_atual, CAST(p.preco*100 AS SIGNED) as preco_orig " +
@@ -78,7 +78,7 @@
         }
         closeAll(_rs6, _ps6, null);
 
-        // Load clients for nova encomenda dropdown
+        // carregar a lista de clientes para a nova encomenda
         if (isNova) {
             _ps6 = _conn6.prepareStatement(
                 "SELECT id_utilizador, nome FROM utilizadores WHERE perfil='cliente' ORDER BY nome");
@@ -91,7 +91,6 @@
             }
         }
     } catch (Exception _e6) {
-        // page renders with empty data on error
     } finally {
         closeAll(_rs6, _ps6, _conn6);
     }
@@ -111,7 +110,7 @@
             int oid;
 
             if (orderIdStr == null || orderIdStr.isEmpty()) {
-                // Create new order
+                // Criar nova encomenda
                 int cid = Integer.parseInt(clienteIdStr);
                 String codigoUnico = "FUS-" + new java.util.Date().getTime();
                 ps = conn.prepareStatement(

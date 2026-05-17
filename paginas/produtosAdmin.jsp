@@ -14,6 +14,7 @@
     }
 %>
 <%
+    // Verificacao da sessao e papel de administrador
     HttpSession sess = request.getSession(false);
     if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
     if (!"administrador".equals(sess.getAttribute("userRole"))) { response.sendRedirect("dashboard.jsp"); return; }
@@ -22,6 +23,7 @@
     String successMsg = (String) sess.getAttribute("success"); if (successMsg != null) sess.removeAttribute("success");
     String errorMsg = null;
 
+    // Processar criacao ou edicao de produto
     if ("POST".equalsIgnoreCase(request.getMethod())) {
         String postAction = request.getParameter("action");
 
@@ -68,6 +70,7 @@
                 } catch (NumberFormatException e) { errorMsg = "Preço ou stock inválido."; }
                 catch (Exception e) { errorMsg = "Erro: " + e.getMessage(); }
             }
+        // Alternar estado ativo/inativo do produto
         } else if ("toggleAtivo".equals(postAction)) {
             String produtoId = request.getParameter("produtoId");
             try {
@@ -82,6 +85,7 @@
         }
     }
 
+    // Carregar lista de todos os produtos da base de dados
     List<Object[]> products = new ArrayList<>();
     Connection _conn1 = null;
     PreparedStatement _ps1 = null;
@@ -103,7 +107,7 @@
             });
         }
     } catch (Exception _e1) {
-        // page renders with empty list
+        // Lista fica vazia em caso de erro
     } finally {
         closeAll(_rs1, _ps1, _conn1);
     }

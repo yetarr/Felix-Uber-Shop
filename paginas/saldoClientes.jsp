@@ -2,7 +2,7 @@
 <%@ page import="java.util.*" %>
 <%@ include file="../basedados/basedados.h" %>
 <%
-    // Session check — funcionario role
+    // Verificacao da sessao e perfil de funcionario
     HttpSession sessao = request.getSession(false);
     if (sessao == null || !"funcionario".equalsIgnoreCase((String) sessao.getAttribute("userRole"))) {
         response.sendRedirect("login.jsp");
@@ -14,6 +14,7 @@
     if (successMsg != null) sessao.removeAttribute("success");
     String errorMsg = null;
 
+    // Processar operacao no saldo do cliente
     if ("POST".equalsIgnoreCase(request.getMethod())) {
         String acao = request.getParameter("action");
         String clienteIdStr = request.getParameter("clienteId");
@@ -56,6 +57,7 @@
         } catch (Exception e) { errorMsg = e.getMessage(); }
     }
 
+    // Carregar lista de clientes ativos com saldo
     List<Object[]> clients = new ArrayList<>();
 
     Connection conn = null;
@@ -86,6 +88,7 @@
         closeAll(rs, ps, conn);
     }
 
+    // Definir cliente selecionado a partir do parametro URL
     String selectedId = request.getParameter("clienteId");
     if ((selectedId == null || selectedId.isEmpty()) && !clients.isEmpty()) {
         selectedId = (String) clients.get(0)[0];
@@ -762,7 +765,7 @@
 </head>
 <body>
 
-<!-- NAV -->
+<!-- Barra de navegacao -->
 <nav class="topnav">
     <a href="index.jsp" class="nav-brand">FelixUberShop</a>
     <div class="nav-right">
@@ -780,7 +783,7 @@
 
 <div class="app-shell">
 
-    <!-- SIDEBAR -->
+    <!-- Menu lateral -->
     <aside class="sidebar">
         <div class="sidebar-label">Área Funcionário</div>
         <ul class="sidebar-nav">
@@ -813,14 +816,14 @@
         </ul>
     </aside>
 
-    <!-- MAIN -->
+    <!-- Conteudo principal -->
     <main class="main-content">
 
         <div class="page-header">
             <h1 class="page-title">Clientes</h1>
         </div>
 
-        <!-- Alerts -->
+        <!-- Mensagens de alerta -->
         <% if (successMsg != null && !successMsg.isEmpty()) { %>
         <div class="alert alert-success">
             <svg viewBox="0 0 24 24" fill="#00CE86">
@@ -838,7 +841,7 @@
         </div>
         <% } %>
 
-        <!-- Search bar -->
+        <!-- Barra de pesquisa de clientes -->
         <div class="search-bar">
             <div class="search-wrap">
                 <svg viewBox="0 0 24 24">
@@ -852,10 +855,10 @@
             <span class="clients-count" id="clientsCount"><%= clients.size() %> clientes</span>
         </div>
 
-        <!-- TWO-COLUMN GRID -->
+        <!-- Grelha de duas colunas -->
         <div class="page-grid">
 
-            <!-- LEFT: CLIENTS TABLE -->
+            <!-- Tabela de clientes registados -->
             <div class="panel">
                 <div class="panel-header">
                     <svg class="panel-icon" viewBox="0 0 24 24">
@@ -927,7 +930,7 @@
                 </table>
             </div>
 
-            <!-- RIGHT: SALDO MANAGEMENT PANEL -->
+            <!-- Painel de gestao de saldo -->
             <div class="saldo-panel" id="saldoPanel">
                 <div class="saldo-panel-header">
                     <div class="saldo-panel-title">
@@ -938,7 +941,7 @@
                     </div>
                 </div>
 
-                <!-- Selected client info -->
+                <!-- Informacao do cliente selecionado -->
                 <div class="sel-client-row" id="selClientRow">
                     <div class="sel-avatar" id="selAvatar">
                         <%= selName.isEmpty() ? "?" : selName.split(" ")[0].charAt(0) + "" + (selName.split(" ").length > 1 ? selName.split(" ")[selName.split(" ").length - 1].charAt(0) : "") %>
@@ -952,7 +955,7 @@
                     </div>
                 </div>
 
-                <!-- Current balance -->
+                <!-- Saldo atual do cliente -->
                 <div class="saldo-atual-row">
                     <span class="saldo-atual-label">Saldo atual</span>
                     <span class="saldo-atual-value" id="saldoAtual">
@@ -960,7 +963,7 @@
                         </span>
                 </div>
 
-                <!-- ADD saldo -->
+                <!-- Formulario de adicionar saldo -->
                 <div class="saldo-action-block">
                     <div class="action-block-title add-title">
                         <svg viewBox="0 0 24 24">
@@ -984,7 +987,7 @@
                     </form>
                 </div>
 
-                <!-- REMOVE saldo -->
+                <!-- Formulario de retirar saldo -->
                 <div class="saldo-action-block">
                     <div class="action-block-title rem-title">
                         <svg viewBox="0 0 24 24">

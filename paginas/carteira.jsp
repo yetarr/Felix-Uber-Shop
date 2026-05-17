@@ -3,7 +3,7 @@
 <%@ page import="java.sql.*" %>
 <%@ include file="../basedados/basedados.h" %>
 <%
-    // Session check
+    // Verificacao da sessao do utilizador
     HttpSession sessao = request.getSession(false);
     Integer userId = (sessao != null) ? (Integer) sessao.getAttribute("userId") : null;
     if (userId == null) {
@@ -67,7 +67,7 @@
     try {
         conn = getConnection();
 
-        // Get user's carteira
+        // Obter a carteira do utilizador
         ps = conn.prepareStatement(
             "SELECT c.id_carteira, c.saldo FROM carteira c WHERE c.id_utilizador = ?");
         ps.setInt(1, userId);
@@ -81,7 +81,7 @@
         closeResultSet(rs); rs = null;
         closeStatement(ps); ps = null;
 
-        // Get movement history
+        // Carregar historico de movimentos da carteira
         if (carteiraId != -1) {
             ps = conn.prepareStatement(
                 "SELECT ac.data_operacao, ac.tipo_operacao, ac.descricao, ac.valor," +
@@ -338,7 +338,7 @@
 </head>
 <body>
 
-    <!-- NAV -->
+    <!-- Barra de navegacao -->
     <nav class="topnav">
         <a href="index.jsp" class="nav-brand">FelixUberShop</a>
         <div class="nav-right">
@@ -352,7 +352,7 @@
 
     <div class="app-shell">
 
-        <!-- SIDEBAR -->
+        <!-- Menu lateral -->
         <aside class="sidebar">
             <div class="sidebar-label">Área Cliente</div>
             <ul class="sidebar-nav">
@@ -375,11 +375,11 @@
             </ul>
         </aside>
 
-        <!-- MAIN -->
+        <!-- Conteudo principal -->
         <main class="main-content">
             <h1 class="page-title">Carteira</h1>
 
-            <!-- Alerts -->
+            <!-- Mensagens de alerta -->
             <% if (successMsg != null && !successMsg.isEmpty()) { %>
             <div class="alert alert-success">
                 <svg viewBox="0 0 24 24" fill="#00CE86"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14l-4-4 1.41-1.41L10 13.17l6.59-6.59L18 8l-8 8z"/></svg>
@@ -393,10 +393,10 @@
             </div>
             <% } %>
 
-            <!-- TOP CARDS -->
+            <!-- Cartoes de saldo e operacoes -->
             <div class="wallet-top">
 
-                <!-- SALDO ATUAL -->
+                <!-- Saldo atual do utilizador -->
                 <div class="wallet-card balance-card">
                     <div class="balance-label">Saldo Atual</div>
                     <div class="balance-value" id="liveBalance"><%= saldoStr %></div>
@@ -406,7 +406,7 @@
                     </div>
                 </div>
 
-                <!-- ADICIONAR SALDO -->
+                <!-- Formulario de deposito -->
                 <div class="wallet-card action-card">
                     <div class="action-label add-lbl">
                         <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
@@ -431,7 +431,7 @@
                     </div>
                 </div>
 
-                <!-- LEVANTAR SALDO -->
+                <!-- Formulario de levantamento -->
                 <div class="wallet-card action-card">
                     <div class="action-label rem-lbl">
                         <svg viewBox="0 0 24 24"><path d="M19 13H5v-2h14v2z"/></svg>
@@ -461,9 +461,9 @@
                     </div>
                 </div>
 
-            </div><!-- end wallet-top -->
+            </div>
 
-            <!-- HISTORY TABLE -->
+            <!-- Tabela de historico de movimentos -->
             <div class="panel">
                 <div class="panel-header">
                     <div class="panel-title">
