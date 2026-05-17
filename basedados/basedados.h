@@ -18,36 +18,24 @@
 
     public Connection getConnection() throws Exception {
         Class.forName(DB_DRIVER);
-        return DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+        return DriverManager.getConnection(DB_URL, DB_USER, "");
     }
 
     public void closeConnection(Connection con) {
         if (con != null) {
-            try {
-                con.close();
-            } catch (SQLException e) {
-                System.err.println("[basedados.h] Erro ao fechar Connection: " + e.getMessage());
-            }
+            try { con.close(); } catch (SQLException ignored) {}
         }
     }
 
     public void closeStatement(PreparedStatement ps) {
         if (ps != null) {
-            try {
-                ps.close();
-            } catch (SQLException e) {
-                System.err.println("[basedados.h] Erro ao fechar PreparedStatement: " + e.getMessage());
-            }
+            try { ps.close(); } catch (SQLException ignored) {}
         }
     }
 
     public void closeResultSet(ResultSet rs) {
         if (rs != null) {
-            try {
-                rs.close();
-            } catch (SQLException e) {
-                System.err.println("[basedados.h] Erro ao fechar ResultSet: " + e.getMessage());
-            }
+            try { rs.close(); } catch (SQLException ignored) {}
         }
     }
 
