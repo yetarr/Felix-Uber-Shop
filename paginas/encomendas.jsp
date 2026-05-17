@@ -11,7 +11,7 @@
     }
 
     String role = (String) sess.getAttribute("userRole");
-    if(!role.equals("cliente")){
+    if (!role.equals("cliente")) {
         response.sendRedirect("login.jsp");
     }
 
@@ -22,7 +22,7 @@
     Map<String, String[][]> details = new LinkedHashMap<>();
 
     String successMsg = (String) request.getAttribute("success");
-    String errorMsg   = (String) request.getAttribute("error");
+    String errorMsg = (String) request.getAttribute("error");
     sess.removeAttribute("success");
     sess.removeAttribute("error");
 
@@ -38,7 +38,8 @@
         String sql = "SELECT e.id_encomenda, u.nome, e.data_encomenda, e.total, e.estado " +
                 "FROM encomenda e JOIN utilizadores u ON u.id_utilizador = e.id_utilizador " +
                 "WHERE e.id_utilizador = ? " +
-                "ORDER BY e.data_encomenda DESC ";;
+                "ORDER BY e.data_encomenda DESC ";
+        ;
         ps = conn.prepareStatement(sql);
         ps.setInt(1, userId);
         rs = ps.executeQuery();
@@ -50,8 +51,10 @@
             String estado = rs.getString("estado");
             orders.add(new String[]{id, cliente, data, total, estado});
         }
-        rs.close(); ps.close();
-        rs = null; ps = null;
+        rs.close();
+        ps.close();
+        rs = null;
+        ps = null;
 
         // Abrir o detalhe da primeira encomenda por defeito
         if (openDetail == null && !orders.isEmpty()) openDetail = orders.get(0)[0];
@@ -72,7 +75,7 @@
                 String nome = rs.getString("nome");
                 double preco = rs.getDouble("preco_unitario");
                 int qty = rs.getInt("quantidade");
-                String fmtPreco    = String.format("%.2f €", preco).replace(".", ",");
+                String fmtPreco = String.format("%.2f €", preco).replace(".", ",");
                 String fmtSubtotal = String.format("%.2f €", preco * qty).replace(".", ",");
                 itemsList.add(new String[]{nome, fmtPreco, String.valueOf(qty), fmtSubtotal});
             }
@@ -81,13 +84,23 @@
             rs.close();
         }
         ps.close();
-        rs = null; ps = null;
+        rs = null;
+        ps = null;
     } catch (Exception e) {
         // Ignorar erros
     } finally {
-        try { if (rs != null) rs.close(); } catch (Exception ignored) {}
-        try { if (ps != null) ps.close(); } catch (Exception ignored) {}
-        try { if (conn != null) conn.close(); } catch (Exception ignored) {}
+        try {
+            if (rs != null) rs.close();
+        } catch (Exception ignored) {
+        }
+        try {
+            if (ps != null) ps.close();
+        } catch (Exception ignored) {
+        }
+        try {
+            if (conn != null) conn.close();
+        } catch (Exception ignored) {
+        }
     }
 
     String activePage = "encomendas";
@@ -754,7 +767,8 @@
                 <svg viewBox="0 0 24 24">
                     <path d="M20 6h-2.18A3 3 0 0 0 15 4H9a3 3 0 0 0-2.82 2H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/>
                 </svg>
-                <p>Ainda não tem encomendas. <a href="novaEncomendaCliente.jsp" style="color:#00CE86;">Criar a primeira</a>
+                <p>Ainda não tem encomendas. <a href="novaEncomendaCliente.jsp" style="color:#00CE86;">Criar a
+                    primeira</a>
                 </p>
             </div>
             <% } else { %>
@@ -779,7 +793,8 @@
                         String ostatus = o[4];
 
                         String badgeClass = "badge-confirmada";
-                        if ("pendente".equalsIgnoreCase(ostatus) || "processando".equalsIgnoreCase(ostatus)) badgeClass = "badge-pendente";
+                        if ("pendente".equalsIgnoreCase(ostatus) || "processando".equalsIgnoreCase(ostatus))
+                            badgeClass = "badge-pendente";
                         if ("cancelado".equalsIgnoreCase(ostatus)) badgeClass = "badge-cancelada";
 
                         boolean isPendente = "pendente".equalsIgnoreCase(ostatus) || "processando".equalsIgnoreCase(ostatus);

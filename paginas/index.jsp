@@ -17,8 +17,7 @@
     // Adicionar todos os produtos a uma lista
     List<String[]> products = new ArrayList<>();
 
-    while(rs.next())
-    {
+    while (rs.next()) {
         String id = (rs.getString("id_produto"));
         String nome = (rs.getString("nome"));
         String descricao = (rs.getString("descricao"));

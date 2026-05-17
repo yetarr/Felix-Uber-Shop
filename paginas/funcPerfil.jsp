@@ -9,14 +9,22 @@
             StringBuilder sb = new StringBuilder();
             for (byte b : h) sb.append(String.format("%02x", b));
             return sb.toString();
-        } catch (Exception e) { throw new RuntimeException(e); }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 %>
 <%
     // Verificacao da sessao e perfil de funcionario
     HttpSession sess = request.getSession(false);
-    if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
-    if (!"funcionario".equals(sess.getAttribute("userRole"))) { response.sendRedirect("login.jsp"); return; }
+    if (sess == null || sess.getAttribute("userId") == null) {
+        response.sendRedirect("login.jsp");
+        return;
+    }
+    if (!"funcionario".equals(sess.getAttribute("userRole"))) {
+        response.sendRedirect("login.jsp");
+        return;
+    }
 
     String funcName = (String) sess.getAttribute("userName");
     if (funcName == null) funcName = "Funcionário";
@@ -39,19 +47,25 @@
                 try {
                     Connection conn = getConnection();
                     PreparedStatement ps = conn.prepareStatement(
-                        "UPDATE utilizadores SET nome=?, email=?, telefone=? WHERE id_utilizador=?");
-                    ps.setString(1, nome.trim()); ps.setString(2, email.trim());
-                    ps.setString(3, telefone != null ? telefone.trim() : null); ps.setInt(4, userId);
-                    ps.executeUpdate(); closeAll(null, ps, conn);
+                            "UPDATE utilizadores SET nome=?, email=?, telefone=? WHERE id_utilizador=?");
+                    ps.setString(1, nome.trim());
+                    ps.setString(2, email.trim());
+                    ps.setString(3, telefone != null ? telefone.trim() : null);
+                    ps.setInt(4, userId);
+                    ps.executeUpdate();
+                    closeAll(null, ps, conn);
                     sess.setAttribute("userName", nome.trim());
                     sess.setAttribute("userEmail", email.trim());
                     sess.setAttribute("success", "Perfil atualizado com sucesso.");
-                    response.sendRedirect("funcPerfil.jsp"); return;
-                } catch (Exception e) { errorMsg = "Erro ao guardar: " + e.getMessage(); }
+                    response.sendRedirect("funcPerfil.jsp");
+                    return;
+                } catch (Exception e) {
+                    errorMsg = "Erro ao guardar: " + e.getMessage();
+                }
             }
         } else if ("changePassword".equals(postAction)) {
             String pwAtual = request.getParameter("password");
-            String pwNova  = request.getParameter("confirmPassword");
+            String pwNova = request.getParameter("confirmPassword");
             if (pwAtual == null || pwAtual.isBlank() || pwNova == null || pwNova.isBlank()) {
                 errorMsg = "Preencha todos os campos de password.";
             } else if (pwNova.length() < 6) {
@@ -60,22 +74,29 @@
                 try {
                     Connection conn = getConnection();
                     PreparedStatement ps = conn.prepareStatement(
-                        "SELECT password_hash FROM utilizadores WHERE id_utilizador=?");
-                    ps.setInt(1, userId); ResultSet rs = ps.executeQuery();
+                            "SELECT password_hash FROM utilizadores WHERE id_utilizador=?");
+                    ps.setInt(1, userId);
+                    ResultSet rs = ps.executeQuery();
                     String storedHash = rs.next() ? rs.getString("password_hash") : "";
-                    rs.close(); ps.close();
+                    rs.close();
+                    ps.close();
                     if (!hashPassword(pwAtual).equals(storedHash)) {
                         errorMsg = "Password atual incorreta.";
                         conn.close();
                     } else {
                         ps = conn.prepareStatement(
-                            "UPDATE utilizadores SET password_hash=? WHERE id_utilizador=?");
-                        ps.setString(1, hashPassword(pwNova)); ps.setInt(2, userId);
-                        ps.executeUpdate(); closeAll(null, ps, conn);
+                                "UPDATE utilizadores SET password_hash=? WHERE id_utilizador=?");
+                        ps.setString(1, hashPassword(pwNova));
+                        ps.setInt(2, userId);
+                        ps.executeUpdate();
+                        closeAll(null, ps, conn);
                         sess.setAttribute("success", "Password alterada com sucesso.");
-                        response.sendRedirect("funcPerfil.jsp"); return;
+                        response.sendRedirect("funcPerfil.jsp");
+                        return;
                     }
-                } catch (Exception e) { errorMsg = "Erro ao alterar password: " + e.getMessage(); }
+                } catch (Exception e) {
+                    errorMsg = "Erro ao alterar password: " + e.getMessage();
+                }
             }
         }
     }
@@ -92,24 +113,26 @@
         Connection conn = getConnection();
 
         PreparedStatement ps = conn.prepareStatement(
-            "SELECT nome, email, telefone, data_registo, ativo FROM utilizadores WHERE id_utilizador = ?");
+                "SELECT nome, email, telefone, data_registo, ativo FROM utilizadores WHERE id_utilizador = ?");
         ps.setInt(1, (Integer) sess.getAttribute("userId"));
         ResultSet rs = ps.executeQuery();
         if (rs.next()) {
-            perfilNome      = rs.getString("nome");
-            perfilEmail     = rs.getString("email");
-            perfilTelefone  = rs.getString("telefone") != null ? rs.getString("telefone") : "";
-            estado          = rs.getBoolean("ativo") ? "Ativo" : "Inativo";
-            String dr       = rs.getString("data_registo");
-            membroDesde     = (dr != null && dr.length() >= 10) ? dr.substring(0, 10) : (dr != null ? dr : "");
+            perfilNome = rs.getString("nome");
+            perfilEmail = rs.getString("email");
+            perfilTelefone = rs.getString("telefone") != null ? rs.getString("telefone") : "";
+            estado = rs.getBoolean("ativo") ? "Ativo" : "Inativo";
+            String dr = rs.getString("data_registo");
+            membroDesde = (dr != null && dr.length() >= 10) ? dr.substring(0, 10) : (dr != null ? dr : "");
         }
-        rs.close(); ps.close();
+        rs.close();
+        ps.close();
 
         // Contar encomendas do sistema para o resumo
         PreparedStatement ps2 = conn.prepareStatement("SELECT COUNT(*) FROM encomenda");
         ResultSet rs2 = ps2.executeQuery();
         if (rs2.next()) encomendasValidadas = String.valueOf(rs2.getInt(1));
-        rs2.close(); ps2.close();
+        rs2.close();
+        ps2.close();
 
         conn.close();
     } catch (Exception e) {

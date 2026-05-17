@@ -30,7 +30,8 @@
             ps.setInt(1, userId);
             rs = ps.executeQuery();
             double saldoActual = rs.next() ? rs.getDouble("saldo") : 0;
-            rs.close(); ps.close();
+            rs.close();
+            ps.close();
 
 
             String codigoUnico = "FUS-" + new java.util.Date().getTime();
@@ -41,7 +42,8 @@
             ps.executeUpdate();
             rs = ps.getGeneratedKeys();
             int oid = rs.next() ? rs.getInt(1) : -1;
-            rs.close(); ps.close();
+            rs.close();
+            ps.close();
 
             if (oid < 0) {
                 conn.rollback();
@@ -49,7 +51,7 @@
             } else {
                 double total = 0;
                 int itemsCount = 0;
-                for (Enumeration<String> params = request.getParameterNames(); params.hasMoreElements();) {
+                for (Enumeration<String> params = request.getParameterNames(); params.hasMoreElements(); ) {
                     String param = params.nextElement();
                     if (param.startsWith("produto_")) {
                         int pid;
@@ -57,28 +59,33 @@
                         try {
                             pid = Integer.parseInt(param.substring("produto_".length()));
                             qty = Integer.parseInt(request.getParameter(param));
-                        } catch (Exception e) { continue; }
+                        } catch (Exception e) {
+                            continue;
+                        }
                         if (qty <= 0) continue;
 
                         ps = conn.prepareStatement(
-                            "SELECT p.preco, pr.desconto_percentagem " +
-                            "FROM produtos p " +
-                            "LEFT JOIN promocao_produto pp ON pp.id_produto = p.id_produto " +
-                            "LEFT JOIN promocoes pr ON pr.id_promocao = pp.id_promocao " +
-                            "AND pr.ativo = 1 AND CURDATE() BETWEEN pr.data_inicio AND pr.data_fim " +
-                            "WHERE p.id_produto = ? AND p.ativo = 1 " +
-                            "GROUP BY p.id_produto, p.preco");
+                                "SELECT p.preco, pr.desconto_percentagem " +
+                                        "FROM produtos p " +
+                                        "LEFT JOIN promocao_produto pp ON pp.id_produto = p.id_produto " +
+                                        "LEFT JOIN promocoes pr ON pr.id_promocao = pp.id_promocao " +
+                                        "AND pr.ativo = 1 AND CURDATE() BETWEEN pr.data_inicio AND pr.data_fim " +
+                                        "WHERE p.id_produto = ? AND p.ativo = 1 " +
+                                        "GROUP BY p.id_produto, p.preco");
                         ps.setInt(1, pid);
                         rs = ps.executeQuery();
-                        if (!rs.next()) { closeAll(rs, ps, null); continue; }
+                        if (!rs.next()) {
+                            closeAll(rs, ps, null);
+                            continue;
+                        }
                         double preco = rs.getDouble("preco");
                         double desc = rs.getDouble("desconto_percentagem");
                         double precoFinal = Math.round(preco * (100.0 - desc)) / 100.0;
                         closeAll(rs, ps, null);
 
                         ps = conn.prepareStatement(
-                            "INSERT INTO encomenda_produto (id_encomenda, id_produto, quantidade, preco_unitario) " +
-                            "VALUES (?, ?, ?, ?)");
+                                "INSERT INTO encomenda_produto (id_encomenda, id_produto, quantidade, preco_unitario) " +
+                                        "VALUES (?, ?, ?, ?)");
                         ps.setInt(1, oid);
                         ps.setInt(2, pid);
                         ps.setInt(3, qty);
@@ -121,9 +128,15 @@
             }
         } catch (Exception ex) {
             errorMsg = "Erro: " + ex.getMessage();
-            if (conn != null) try { conn.rollback(); } catch (SQLException ignored) {}
+            if (conn != null) try {
+                conn.rollback();
+            } catch (SQLException ignored) {
+            }
         } finally {
-            if (conn != null) try { conn.setAutoCommit(true); } catch (SQLException ignored) {}
+            if (conn != null) try {
+                conn.setAutoCommit(true);
+            } catch (SQLException ignored) {
+            }
             closeAll(rs, ps, conn);
         }
     }
@@ -144,31 +157,31 @@
         closeAll(rs, ps, null);
 
         ps = conn.prepareStatement(
-            "SELECT p.id_produto, p.nome, p.categoria, " +
-            "CAST(p.preco*100 AS SIGNED) AS preco_orig_cents, " +
-            "COALESCE(MAX(pr.desconto_percentagem),0) AS desc_pct " +
-            "FROM produtos p " +
-            "LEFT JOIN promocao_produto pp ON pp.id_produto = p.id_produto " +
-            "LEFT JOIN promocoes pr ON pr.id_promocao = pp.id_promocao " +
-            "  AND pr.ativo = 1 AND CURDATE() BETWEEN pr.data_inicio AND pr.data_fim " +
-            "WHERE p.ativo = 1 " +
-            "GROUP BY p.id_produto, p.nome, p.categoria, p.preco " +
-            "ORDER BY p.nome");
+                "SELECT p.id_produto, p.nome, p.categoria, " +
+                        "CAST(p.preco*100 AS SIGNED) AS preco_orig_cents, " +
+                        "COALESCE(MAX(pr.desconto_percentagem),0) AS desc_pct " +
+                        "FROM produtos p " +
+                        "LEFT JOIN promocao_produto pp ON pp.id_produto = p.id_produto " +
+                        "LEFT JOIN promocoes pr ON pr.id_promocao = pp.id_promocao " +
+                        "  AND pr.ativo = 1 AND CURDATE() BETWEEN pr.data_inicio AND pr.data_fim " +
+                        "WHERE p.ativo = 1 " +
+                        "GROUP BY p.id_produto, p.nome, p.categoria, p.preco " +
+                        "ORDER BY p.nome");
         rs = ps.executeQuery();
         while (rs.next()) {
             int priceOrig = (int) rs.getLong("preco_orig_cents");
             int discPct = (int) Math.round(rs.getDouble("desc_pct"));
             int priceFinal = discPct > 0
-                ? (int) Math.round(priceOrig * (100.0 - discPct) / 100.0)
-                : priceOrig;
+                    ? (int) Math.round(priceOrig * (100.0 - discPct) / 100.0)
+                    : priceOrig;
             catalogue.add(new Object[]{
-                String.valueOf(rs.getInt("id_produto")),
-                rs.getString("nome"),
-                rs.getString("categoria") != null ? rs.getString("categoria") : "",
-                priceFinal,
-                discPct,
-                0,
-                priceOrig
+                    String.valueOf(rs.getInt("id_produto")),
+                    rs.getString("nome"),
+                    rs.getString("categoria") != null ? rs.getString("categoria") : "",
+                    priceFinal,
+                    discPct,
+                    0,
+                    priceOrig
             });
         }
     } catch (Exception e) {
@@ -800,7 +813,8 @@
             <svg viewBox="0 0 24 24">
                 <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
             </svg>
-            Olá, <strong style="color:#e0e0e0;margin-left:4px;"><%= clienteName %></strong>
+            Olá, <strong style="color:#e0e0e0;margin-left:4px;"><%= clienteName %>
+        </strong>
         </div>
         <a href="logout.jsp" class="btn-sair">Sair</a>
     </div>
@@ -876,7 +890,8 @@
                             </svg>
                             <span>foto</span>
                         </div>
-                        <div class="product-name"><%= pname %></div>
+                        <div class="product-name"><%= pname %>
+                        </div>
                         <div class="product-price-row">
                             <span class="product-price"><%= priceStr %></span>
                             <% if (disc > 0) { %>
@@ -884,9 +899,13 @@
                             <% } %>
                         </div>
                         <div class="stepper">
-                            <button type="button" onclick="changeQty('<%= pid %>',-1,<%= price %>,'<%= safeName %>')">&#8722;</button>
+                            <button type="button" onclick="changeQty('<%= pid %>',-1,<%= price %>,'<%= safeName %>')">
+                                &#8722;
+                            </button>
                             <span class="qty-val" id="qty-<%= pid %>">0</span>
-                            <button type="button" onclick="changeQty('<%= pid %>',1,<%= price %>,'<%= safeName %>')">&#43;</button>
+                            <button type="button" onclick="changeQty('<%= pid %>',1,<%= price %>,'<%= safeName %>')">
+                                &#43;
+                            </button>
                         </div>
                     </div>
                     <% } %>
@@ -943,7 +962,10 @@
                     <%
                         boolean anyPromo = false;
                         for (Object[] p : catalogue) {
-                            if ((Integer) p[4] > 0) { anyPromo = true; break; }
+                            if ((Integer) p[4] > 0) {
+                                anyPromo = true;
+                                break;
+                            }
                         }
                     %>
                     <% if (!anyPromo) { %>
@@ -1012,10 +1034,10 @@
             const sub = item.price * item.qty;
             total += sub;
             html += '<div class="order-item">' +
-                    '<span><span class="iname">' + item.name + '</span>' +
-                    '<span class="iqty">× ' + item.qty + '</span></span>' +
-                    '<span class="iprice">' + fmt(sub) + '</span>' +
-                    '</div>';
+                '<span><span class="iname">' + item.name + '</span>' +
+                '<span class="iqty">× ' + item.qty + '</span></span>' +
+                '<span class="iprice">' + fmt(sub) + '</span>' +
+                '</div>';
         });
         box.innerHTML = html;
         document.getElementById('totalValue').textContent = fmt(total);

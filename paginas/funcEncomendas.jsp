@@ -17,17 +17,18 @@
     if ("POST".equalsIgnoreCase(request.getMethod()) && "validar".equals(request.getParameter("action"))) {
         String eid = request.getParameter("id");
         try {
-            Connection _vc = getConnection();
-            PreparedStatement _vps = _vc.prepareStatement(
-                "UPDATE encomenda SET estado='pronto' WHERE id_encomenda=? AND estado='pendente'");
-            _vps.setInt(1, Integer.parseInt(eid));
-            int rows = _vps.executeUpdate();
-            closeAll(null, _vps, _vc);
+            Connection conn = getConnection();
+            PreparedStatement ps = conn.prepareStatement(
+                    "UPDATE encomenda SET estado='pronto' WHERE id_encomenda=? AND estado='pendente'");
+            ps.setInt(1, Integer.parseInt(eid));
+            int rows = ps.executeUpdate();
+            closeAll(null, ps, conn);
             sess.setAttribute("success", rows > 0 ? "Encomenda #" + eid + " confirmada com sucesso." : "Encomenda não encontrada ou já confirmada.");
-        } catch (Exception _ve) {
+        } catch (Exception e) {
             sess.setAttribute("errorMsg", "Erro: " + _ve.getMessage());
         }
-        response.sendRedirect("funcEncomendas.jsp"); return;
+        response.sendRedirect("funcEncomendas.jsp");
+        return;
     }
 
     // Acao de cancelar encomenda
@@ -36,7 +37,7 @@
         try {
             Connection _vc = getConnection();
             PreparedStatement _vps = _vc.prepareStatement(
-                "UPDATE encomenda SET estado='cancelado' WHERE id_encomenda=? AND estado IN ('pendente','processando','pronto')");
+                    "UPDATE encomenda SET estado='cancelado' WHERE id_encomenda=? AND estado IN ('pendente','processando','pronto')");
             _vps.setInt(1, Integer.parseInt(eid));
             int rows = _vps.executeUpdate();
             closeAll(null, _vps, _vc);
@@ -44,20 +45,23 @@
         } catch (Exception _ve) {
             sess.setAttribute("errorMsg", "Erro: " + _ve.getMessage());
         }
-        response.sendRedirect("funcEncomendas.jsp"); return;
+        response.sendRedirect("funcEncomendas.jsp");
+        return;
     }
 
     // Parametros de filtro e pesquisa
     String filterCliente = request.getParameter("cliente") != null ? request.getParameter("cliente") : "";
-    String filterEstado  = request.getParameter("estado")  != null ? request.getParameter("estado")  : "";
-    String filterData    = request.getParameter("data")    != null ? request.getParameter("data")    : "2026-05-04";
+    String filterEstado = request.getParameter("estado") != null ? request.getParameter("estado") : "";
+    String filterData = request.getParameter("data") != null ? request.getParameter("data") : "2026-05-04";
 
     // Listas para encomendas e detalhes dos itens
     List<String[]> allOrders = new ArrayList<>();
     Map<String, String[][]> details = new LinkedHashMap<>();
 
-    String successMsg = (String) sess.getAttribute("success"); if (successMsg != null) sess.removeAttribute("success");
-    String errorMsg   = (String) sess.getAttribute("errorMsg"); if (errorMsg != null) sess.removeAttribute("errorMsg");
+    String successMsg = (String) sess.getAttribute("success");
+    if (successMsg != null) sess.removeAttribute("success");
+    String errorMsg = (String) sess.getAttribute("errorMsg");
+    if (errorMsg != null) sess.removeAttribute("errorMsg");
 
     String openDetail = request.getParameter("detalhe");
 
@@ -69,10 +73,10 @@
 
         // Carregar todas as encomendas com filtros opcionais
         String sql = "SELECT e.id_encomenda, u.nome, e.data_encomenda, e.total, e.estado " +
-                     "FROM encomenda e JOIN utilizadores u ON u.id_utilizador = e.id_utilizador " +
-                     "WHERE (u.nome LIKE ? OR ? = '') " +
-                     "  AND (e.estado = ? OR ? = '') " +
-                     "ORDER BY e.data_encomenda DESC";
+                "FROM encomenda e JOIN utilizadores u ON u.id_utilizador = e.id_utilizador " +
+                "WHERE (u.nome LIKE ? OR ? = '') " +
+                "  AND (e.estado = ? OR ? = '') " +
+                "ORDER BY e.data_encomenda DESC";
         ps = conn.prepareStatement(sql);
         String likeCliente = filterCliente.isEmpty() ? "" : "%" + filterCliente + "%";
         ps.setString(1, likeCliente);
@@ -81,15 +85,16 @@
         ps.setString(4, filterEstado);
         rs = ps.executeQuery();
         while (rs.next()) {
-            String id     = rs.getString("id_encomenda");
-            String nome   = rs.getString("nome");
-            String data   = rs.getString("data_encomenda");
-            String total  = String.format("%.2f €", rs.getDouble("total")).replace(".", ",");
+            String id = rs.getString("id_encomenda");
+            String nome = rs.getString("nome");
+            String data = rs.getString("data_encomenda");
+            String total = String.format("%.2f €", rs.getDouble("total")).replace(".", ",");
             String estado = rs.getString("estado");
             allOrders.add(new String[]{id, nome, data, total, estado});
         }
         closeAll(rs, ps, null);
-        rs = null; ps = null;
+        rs = null;
+        ps = null;
 
         // Determinar qual encomenda abrir por defeito
         if (openDetail == null && !allOrders.isEmpty()) openDetail = allOrders.get(0)[0];
@@ -98,8 +103,8 @@
         if (!allOrders.isEmpty()) {
             String placeholders = String.join(",", Collections.nCopies(allOrders.size(), "?"));
             String sqlItems = "SELECT ep.id_encomenda, p.nome, ep.preco_unitario, ep.quantidade " +
-                              "FROM encomenda_produto ep JOIN produtos p ON p.id_produto = ep.id_produto " +
-                              "WHERE ep.id_encomenda IN (" + placeholders + ")";
+                    "FROM encomenda_produto ep JOIN produtos p ON p.id_produto = ep.id_produto " +
+                    "WHERE ep.id_encomenda IN (" + placeholders + ")";
             ps = conn.prepareStatement(sqlItems);
             for (int _i = 0; _i < allOrders.size(); _i++) {
                 ps.setInt(_i + 1, Integer.parseInt(allOrders.get(_i)[0]));
@@ -107,17 +112,18 @@
             rs = ps.executeQuery();
             Map<String, List<String[]>> tempDetails = new LinkedHashMap<>();
             while (rs.next()) {
-                String eid         = rs.getString("id_encomenda");
-                String nome        = rs.getString("nome");
-                double preco       = rs.getDouble("preco_unitario");
-                int    qty         = rs.getInt("quantidade");
-                String fmtPreco    = String.format("%.2f €", preco).replace(".", ",");
+                String eid = rs.getString("id_encomenda");
+                String nome = rs.getString("nome");
+                double preco = rs.getDouble("preco_unitario");
+                int qty = rs.getInt("quantidade");
+                String fmtPreco = String.format("%.2f €", preco).replace(".", ",");
                 String fmtSubtotal = String.format("%.2f €", preco * qty).replace(".", ",");
                 if (!tempDetails.containsKey(eid)) tempDetails.put(eid, new ArrayList<String[]>());
                 tempDetails.get(eid).add(new String[]{nome, fmtPreco, String.valueOf(qty), fmtSubtotal});
             }
             closeAll(rs, ps, null);
-            rs = null; ps = null;
+            rs = null;
+            ps = null;
             for (Map.Entry<String, List<String[]>> entry : tempDetails.entrySet()) {
                 details.put(entry.getKey(), entry.getValue().toArray(new String[0][]));
             }
@@ -891,11 +897,18 @@
                 <div class="filter-group" style="flex:0 0 auto;min-width:170px;">
                     <span class="ico"><svg viewBox="0 0 24 24"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"/></svg></span>
                     <select name="estado" class="filter-select">
-                        <option value=""            <%= "".equals(filterEstado)              ? "selected" : "" %>>Todos os estados</option>
-                        <option value="pendente"    <%= "pendente".equals(filterEstado)    ? "selected" : "" %>>Pendente</option>
-                        <option value="processando" <%= "processando".equals(filterEstado) ? "selected" : "" %>>Processando</option>
-                        <option value="pronto"      <%= "pronto".equals(filterEstado)      ? "selected" : "" %>>Pronto</option>
-                        <option value="cancelado"   <%= "cancelado".equals(filterEstado)   ? "selected" : "" %>>Cancelado</option>
+                        <option value=""            <%= "".equals(filterEstado) ? "selected" : "" %>>Todos os estados
+                        </option>
+                        <option value="pendente"    <%= "pendente".equals(filterEstado) ? "selected" : "" %>>Pendente
+                        </option>
+                        <option value="processando" <%= "processando".equals(filterEstado) ? "selected" : "" %>>
+                            Processando
+                        </option>
+                        <option value="pronto"      <%= "pronto".equals(filterEstado) ? "selected" : "" %>>Pronto
+                        </option>
+                        <option value="cancelado"   <%= "cancelado".equals(filterEstado) ? "selected" : "" %>>
+                            Cancelado
+                        </option>
                     </select>
                 </div>
 
@@ -953,12 +966,13 @@
                         String ostat = o[4];
 
                         String badgeClass = "badge-confirmada";
-                        if ("pendente".equalsIgnoreCase(ostat) || "processando".equalsIgnoreCase(ostat)) badgeClass = "badge-pendente";
+                        if ("pendente".equalsIgnoreCase(ostat) || "processando".equalsIgnoreCase(ostat))
+                            badgeClass = "badge-pendente";
                         if ("cancelado".equalsIgnoreCase(ostat)) badgeClass = "badge-cancelada";
 
-                        boolean isPendente   = "pendente".equalsIgnoreCase(ostat) || "processando".equalsIgnoreCase(ostat);
+                        boolean isPendente = "pendente".equalsIgnoreCase(ostat) || "processando".equalsIgnoreCase(ostat);
                         boolean isConfirmada = "pronto".equalsIgnoreCase(ostat);
-                        boolean isCancelada  = "cancelado".equalsIgnoreCase(ostat);
+                        boolean isCancelada = "cancelado".equalsIgnoreCase(ostat);
                         boolean isOpen = oid.equals(openDetail);
 
                         String[] parts = ocli.split(" ");

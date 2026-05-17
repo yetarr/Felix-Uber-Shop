@@ -18,90 +18,98 @@
     String adminName = (String) sess.getAttribute("userName");
 
     int clientesRegistados = 0;
-    int clientesAtivos     = 0;
-    int clientesInativos   = 0;
-    int encPendentes       = 0;
-    int produtosAtivos     = 0;
-    int produtosSemStock   = 0;
-    String saldoLoja       = "0,00 €";
+    int clientesAtivos = 0;
+    int clientesInativos = 0;
+    int encPendentes = 0;
+    int produtosAtivos = 0;
+    int produtosSemStock = 0;
+    String saldoLoja = "0,00 €";
 
     List<String[]> recentOrders = new ArrayList<>();
-    List<String[]> recentUsers  = new ArrayList<>();
+    List<String[]> recentUsers = new ArrayList<>();
 
     try {
         Connection conn = getConnection();
 
         // Clientes registados / ativos / inativos
         PreparedStatement ps = conn.prepareStatement(
-            "SELECT COUNT(*) AS total FROM utilizadores WHERE perfil = 'cliente'");
+                "SELECT COUNT(*) AS total FROM utilizadores WHERE perfil = 'cliente'");
         ResultSet rs = ps.executeQuery();
         if (rs.next()) clientesRegistados = rs.getInt("total");
-        rs.close(); ps.close();
+        rs.close();
+        ps.close();
 
         ps = conn.prepareStatement(
-            "SELECT COUNT(*) AS total FROM utilizadores WHERE perfil = 'cliente' AND ativo = 1");
+                "SELECT COUNT(*) AS total FROM utilizadores WHERE perfil = 'cliente' AND ativo = 1");
         rs = ps.executeQuery();
         if (rs.next()) clientesAtivos = rs.getInt("total");
-        rs.close(); ps.close();
+        rs.close();
+        ps.close();
         clientesInativos = clientesRegistados - clientesAtivos;
 
         // Encomendas pendentes
         ps = conn.prepareStatement(
-            "SELECT COUNT(*) AS total FROM encomenda WHERE estado = 'pendente'");
+                "SELECT COUNT(*) AS total FROM encomenda WHERE estado = 'pendente'");
         rs = ps.executeQuery();
         if (rs.next()) encPendentes = rs.getInt("total");
-        rs.close(); ps.close();
+        rs.close();
+        ps.close();
 
         // Produtos ativos e sem stock
         ps = conn.prepareStatement(
-            "SELECT COUNT(*) AS total FROM produtos WHERE ativo = 1");
+                "SELECT COUNT(*) AS total FROM produtos WHERE ativo = 1");
         rs = ps.executeQuery();
         if (rs.next()) produtosAtivos = rs.getInt("total");
-        rs.close(); ps.close();
+        rs.close();
+        ps.close();
 
         ps = conn.prepareStatement(
-            "SELECT COUNT(*) AS total FROM produtos WHERE ativo = 1 AND stock = 0");
+                "SELECT COUNT(*) AS total FROM produtos WHERE ativo = 1 AND stock = 0");
         rs = ps.executeQuery();
         if (rs.next()) produtosSemStock = rs.getInt("total");
-        rs.close(); ps.close();
+        rs.close();
+        ps.close();
 
         // Saldo da loja (soma das encomendas confirmadas)
         ps = conn.prepareStatement(
-            "SELECT COALESCE(SUM(total), 0) AS saldo FROM encomenda WHERE estado = 'confirmada'");
+                "SELECT COALESCE(SUM(total), 0) AS saldo FROM encomenda WHERE estado = 'confirmada'");
         rs = ps.executeQuery();
         if (rs.next()) saldoLoja = String.format("%.2f €", rs.getDouble("saldo")).replace(".", ",");
-        rs.close(); ps.close();
+        rs.close();
+        ps.close();
 
         // Ultimas 5 encomendas
         ps = conn.prepareStatement(
-            "SELECT e.id_encomenda, u.nome, e.data_encomenda, e.total, e.estado " +
-            "FROM encomenda e " +
-            "LEFT JOIN utilizadores u ON u.id_utilizador = e.id_utilizador " +
-            "ORDER BY e.data_encomenda DESC LIMIT 5");
+                "SELECT e.id_encomenda, u.nome, e.data_encomenda, e.total, e.estado " +
+                        "FROM encomenda e " +
+                        "LEFT JOIN utilizadores u ON u.id_utilizador = e.id_utilizador " +
+                        "ORDER BY e.data_encomenda DESC LIMIT 5");
         rs = ps.executeQuery();
         while (rs.next()) {
             recentOrders.add(new String[]{
-                rs.getString("id_encomenda"),
-                rs.getString("nome"),
-                rs.getString("data_encomenda"),
-                String.format("%.2f €", rs.getDouble("total")).replace(".", ","),
-                rs.getString("estado")
+                    rs.getString("id_encomenda"),
+                    rs.getString("nome"),
+                    rs.getString("data_encomenda"),
+                    String.format("%.2f €", rs.getDouble("total")).replace(".", ","),
+                    rs.getString("estado")
             });
         }
-        rs.close(); ps.close();
+        rs.close();
+        ps.close();
 
         // Ultimos 5 utilizadores registados
         ps = conn.prepareStatement(
-            "SELECT nome, perfil, ativo FROM utilizadores ORDER BY id_utilizador DESC LIMIT 5");
+                "SELECT nome, perfil, ativo FROM utilizadores ORDER BY id_utilizador DESC LIMIT 5");
         rs = ps.executeQuery();
         while (rs.next()) {
             recentUsers.add(new String[]{
-                rs.getString("nome"),
-                rs.getString("perfil"),
-                rs.getBoolean("ativo") ? "Ativo" : "Inativo"
+                    rs.getString("nome"),
+                    rs.getString("perfil"),
+                    rs.getBoolean("ativo") ? "Ativo" : "Inativo"
             });
         }
-        rs.close(); ps.close();
+        rs.close();
+        ps.close();
 
         conn.close();
     } catch (Exception e) {
@@ -602,7 +610,8 @@
             <svg viewBox="0 0 24 24">
                 <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
             </svg>
-            Olá, <strong style="color:#e0e0e0;margin-left:4px;"><%= adminName %></strong>
+            Olá, <strong style="color:#e0e0e0;margin-left:4px;"><%= adminName %>
+        </strong>
         </div>
         <a href="login.jsp" class="btn-sair">Sair</a>
     </div>
@@ -691,7 +700,8 @@
                 <div class="stat-top">
                     <div>
                         <div class="stat-label">Clientes Registados</div>
-                        <div class="stat-value"><%= clientesRegistados %></div>
+                        <div class="stat-value"><%= clientesRegistados %>
+                        </div>
                     </div>
                     <div class="stat-icon">
                         <svg viewBox="0 0 24 24">
@@ -711,7 +721,8 @@
                 <div class="stat-top">
                     <div>
                         <div class="stat-label">Encomendas Pendentes</div>
-                        <div class="stat-value"><%= encPendentes %></div>
+                        <div class="stat-value"><%= encPendentes %>
+                        </div>
                     </div>
                     <div class="stat-icon">
                         <svg viewBox="0 0 24 24">
@@ -727,7 +738,8 @@
                 <div class="stat-top">
                     <div>
                         <div class="stat-label">Produtos Ativos</div>
-                        <div class="stat-value"><%= produtosAtivos %></div>
+                        <div class="stat-value"><%= produtosAtivos %>
+                        </div>
                     </div>
                     <div class="stat-icon">
                         <svg viewBox="0 0 24 24">
@@ -737,9 +749,9 @@
                 </div>
                 <div class="stat-sub">
                     <% if (produtosSemStock == 0) { %>
-                        <span class="hi">0 sem stock</span>
+                    <span class="hi">0 sem stock</span>
                     <% } else { %>
-                        <span class="warn"><%= produtosSemStock %> sem stock</span>
+                    <span class="warn"><%= produtosSemStock %> sem stock</span>
                     <% } %>
                 </div>
             </div>
@@ -749,7 +761,8 @@
                 <div class="stat-top">
                     <div>
                         <div class="stat-label">Saldo FelixUberShop</div>
-                        <div class="stat-value green"><%= saldoLoja %></div>
+                        <div class="stat-value green"><%= saldoLoja %>
+                        </div>
                     </div>
                     <div class="stat-icon">
                         <svg viewBox="0 0 24 24">
@@ -788,14 +801,14 @@
                     <tbody>
                     <%
                         for (String[] o : recentOrders) {
-                            String oid   = o[0];
-                            String ocli  = o[1];
+                            String oid = o[0];
+                            String ocli = o[1];
                             String odate = o[2];
                             String ototal = o[3];
                             String ostat = o[4];
 
                             String badgeClass = "badge-confirmada";
-                            if ("Pendente".equalsIgnoreCase(ostat))  badgeClass = "badge-pendente";
+                            if ("Pendente".equalsIgnoreCase(ostat)) badgeClass = "badge-pendente";
                             if ("Cancelada".equalsIgnoreCase(ostat)) badgeClass = "badge-cancelada";
 
                             String[] parts = ocli.split(" ");
@@ -804,15 +817,19 @@
                                     : "" + parts[0].charAt(0);
                     %>
                     <tr onclick="location.href='encomendasAdmin.jsp?id=<%= oid %>'">
-                        <td class="order-id">#<%= oid %></td>
+                        <td class="order-id">#<%= oid %>
+                        </td>
                         <td>
                             <div class="client-cell">
-                                <div class="avatar-sm"><%= initials %></div>
+                                <div class="avatar-sm"><%= initials %>
+                                </div>
                                 <%= ocli %>
                             </div>
                         </td>
-                        <td><%= odate %></td>
-                        <td><strong><%= ototal %></strong></td>
+                        <td><%= odate %>
+                        </td>
+                        <td><strong><%= ototal %>
+                        </strong></td>
                         <td><span class="badge <%= badgeClass %>"><%= ostat %></span></td>
                     </tr>
                     <% } %>
@@ -842,7 +859,7 @@
                     <tbody>
                     <%
                         for (String[] u : recentUsers) {
-                            String uname   = u[0];
+                            String uname = u[0];
                             String uperfil = u[1];
                             String uestado = u[2];
 
@@ -856,7 +873,8 @@
                     <tr onclick="location.href='utilizadoresAdmin.jsp'">
                         <td>
                             <div class="client-cell">
-                                <div class="avatar-sm"><%= uinitials %></div>
+                                <div class="avatar-sm"><%= uinitials %>
+                                </div>
                                 <%= uname %>
                             </div>
                         </td>

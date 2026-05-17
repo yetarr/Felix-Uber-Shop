@@ -13,39 +13,39 @@
     // Carregar movimentos de carteira para a lista de logs
     List<String[]> logs = new ArrayList<>();
 
-    Connection _conn7 = null;
-    PreparedStatement _ps7 = null;
-    ResultSet _rs7 = null;
+    Connection conn = null;
+    PreparedStatement ps = null;
+    ResultSet rs = null;
     try {
-        _conn7 = getConnection();
-        _ps7 = _conn7.prepareStatement(
-            "SELECT ac.data_operacao, 'Carteira' as categoria, ac.tipo_operacao as acao, " +
-            "u.nome as utilizador, COALESCE(ac.descricao,'') as detalhe, " +
-            "ac.valor, ac.id_carteira_origem, c.id_carteira as user_carteira " +
-            "FROM auditoria_carteira ac " +
-            "JOIN carteira c ON c.id_carteira = ac.id_carteira_origem OR c.id_carteira = ac.id_carteira_destino " +
-            "JOIN utilizadores u ON u.id_utilizador = c.id_utilizador AND c.is_loja = 0 " +
-            "ORDER BY ac.data_operacao DESC LIMIT 50");
-        _rs7 = _ps7.executeQuery();
-        while (_rs7.next()) {
-            String tipo = _rs7.getString("acao");
-            double valor = _rs7.getDouble("valor");
+        conn = getConnection();
+        ps = conn.prepareStatement(
+                "SELECT ac.data_operacao, 'Carteira' as categoria, ac.tipo_operacao as acao, " +
+                        "u.nome as utilizador, COALESCE(ac.descricao,'') as detalhe, " +
+                        "ac.valor, ac.id_carteira_origem, c.id_carteira as user_carteira " +
+                        "FROM auditoria_carteira ac " +
+                        "JOIN carteira c ON c.id_carteira = ac.id_carteira_origem OR c.id_carteira = ac.id_carteira_destino " +
+                        "JOIN utilizadores u ON u.id_utilizador = c.id_utilizador AND c.is_loja = 0 " +
+                        "ORDER BY ac.data_operacao DESC LIMIT 50");
+        rs = ps.executeQuery();
+        while (rs.next()) {
+            String tipo = rs.getString("acao");
+            double valor = rs.getDouble("valor");
             boolean isDebit = "pagamento".equals(tipo) || "levantamento".equals(tipo);
             String sign = isDebit ? "-" : "+";
             String valorFmt = sign + String.format("%,.2f €", valor).replace(".", ",");
             logs.add(new String[]{
-                String.valueOf(_rs7.getTimestamp("data_operacao")),
-                "Carteira",
-                tipo,
-                _rs7.getString("utilizador") != null ? _rs7.getString("utilizador") : "",
-                _rs7.getString("detalhe"),
-                valorFmt
+                    String.valueOf(rs.getTimestamp("data_operacao")),
+                    "Carteira",
+                    tipo,
+                    rs.getString("utilizador") != null ? rs.getString("utilizador") : "",
+                    rs.getString("detalhe"),
+                    valorFmt
             });
         }
     } catch (Exception _e7) {
         // Lista fica vazia em caso de erro
     } finally {
-        closeAll(_rs7, _ps7, _conn7);
+        closeAll(rs, ps, conn);
     }
 
     // Contagem por categoria para os separadores

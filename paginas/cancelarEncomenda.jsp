@@ -44,8 +44,10 @@
         }
 
         String estadoAtual = rs.getString("estado");
-        rs.close(); ps.close();
-        rs = null; ps = null;
+        rs.close();
+        ps.close();
+        rs = null;
+        ps = null;
 
         //  Verificar se o estado permite cancelamento
         boolean podeCancelar = "pendente".equalsIgnoreCase(estadoAtual) || "processando".equalsIgnoreCase(estadoAtual);
@@ -75,8 +77,10 @@
 
         if (rs.next()) {
             double totalPago = rs.getDouble("total");
-            rs.close(); ps.close();
-            rs = null;  ps = null;
+            rs.close();
+            ps.close();
+            rs = null;
+            ps = null;
 
             String sqlDevolucao = "UPDATE utilizadores " +
                     "SET saldo = saldo + ? " +
@@ -111,8 +115,17 @@
         response.sendRedirect("encomendas.jsp");
 
     } finally {
-        try { if (rs != null) rs.close(); } catch (Exception ignored) {}
-        try { if (ps != null) ps.close(); } catch (Exception ignored) {}
-        try { if (conn != null) conn.close(); } catch (Exception ignored) {}
+        try {
+            if (rs != null) rs.close();
+        } catch (Exception ignored) {
+        }
+        try {
+            if (ps != null) ps.close();
+        } catch (Exception ignored) {
+        }
+        try {
+            if (conn != null) conn.close();
+        } catch (Exception ignored) {
+        }
     }
 %>

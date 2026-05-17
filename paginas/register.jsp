@@ -1,7 +1,8 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*" %>
+<%@ page import="java.sql.*" %>
 <%@ page import="java.security.MessageDigest, java.nio.charset.StandardCharsets" %>
-<%@ include file="../basedados/basedados.h"%>
+<%@ include file="../basedados/basedados.h" %>
 <%!
     // Hashing da password
     private String hashPassword(String plain) {
@@ -29,7 +30,7 @@
         emailVal = request.getParameter("email") != null ? request.getParameter("email") : "";
         telefoneVal = request.getParameter("telefone") != null ? request.getParameter("telefone") : "";
         String password = request.getParameter("password");
-        String confirm  = request.getParameter("confirmPassword");
+        String confirm = request.getParameter("confirmPassword");
 
         // Validacao dos campos
         if (nomeVal.isBlank() || emailVal.isBlank() || password == null || password.isBlank()) {
@@ -70,7 +71,8 @@
                     return;
                 }
 
-                check.close(); conn.close();
+                check.close();
+                conn.close();
             } catch (Exception e) {
                 errorMsg = "Erro ao criar conta: " + e.getMessage();
             }

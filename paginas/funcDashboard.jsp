@@ -18,82 +18,82 @@
     List<String[]> recentOrders = new ArrayList<>();
     List<String[]> walletFeed = new ArrayList<>();
 
-    Connection _conn3 = null;
-    PreparedStatement _ps3 = null;
-    ResultSet _rs3 = null;
+    Connection conn = null;
+    PreparedStatement ps = null;
+    ResultSet rs = null;
     try {
-        _conn3 = getConnection();
+        conn = getConnection();
 
         // Contagens estatisticas para o dashboard
-        _ps3 = _conn3.prepareStatement("SELECT COUNT(*) FROM encomenda WHERE estado='pendente'");
-        _rs3 = _ps3.executeQuery();
-        if (_rs3.next()) encPendentes = _rs3.getInt(1);
-        closeAll(_rs3, _ps3, null);
+        ps = conn.prepareStatement("SELECT COUNT(*) FROM encomenda WHERE estado='pendente'");
+        rs = ps.executeQuery();
+        if (rs.next()) encPendentes = rs.getInt(1);
+        closeAll(rs, ps, null);
 
-        _ps3 = _conn3.prepareStatement("SELECT COUNT(*) FROM encomenda WHERE DATE(data_encomenda)=CURDATE()");
-        _rs3 = _ps3.executeQuery();
-        if (_rs3.next()) encHoje = _rs3.getInt(1);
-        closeAll(_rs3, _ps3, null);
+        ps = conn.prepareStatement("SELECT COUNT(*) FROM encomenda WHERE DATE(data_encomenda)=CURDATE()");
+        rs = ps.executeQuery();
+        if (rs.next()) encHoje = rs.getInt(1);
+        closeAll(rs, ps, null);
 
-        _ps3 = _conn3.prepareStatement("SELECT COUNT(*) FROM encomenda WHERE DATE(data_encomenda)=CURDATE() AND estado='cancelado'");
-        _rs3 = _ps3.executeQuery();
-        if (_rs3.next()) encHojeCanceladas = _rs3.getInt(1);
-        closeAll(_rs3, _ps3, null);
+        ps = conn.prepareStatement("SELECT COUNT(*) FROM encomenda WHERE DATE(data_encomenda)=CURDATE() AND estado='cancelado'");
+        rs = ps.executeQuery();
+        if (rs.next()) encHojeCanceladas = rs.getInt(1);
+        closeAll(rs, ps, null);
 
-        _ps3 = _conn3.prepareStatement("SELECT COUNT(*) FROM encomenda WHERE DATE(data_encomenda)=CURDATE() AND estado='pronto'");
-        _rs3 = _ps3.executeQuery();
-        if (_rs3.next()) encHojeConfirmadas = _rs3.getInt(1);
-        closeAll(_rs3, _ps3, null);
+        ps = conn.prepareStatement("SELECT COUNT(*) FROM encomenda WHERE DATE(data_encomenda)=CURDATE() AND estado='pronto'");
+        rs = ps.executeQuery();
+        if (rs.next()) encHojeConfirmadas = rs.getInt(1);
+        closeAll(rs, ps, null);
 
-        _ps3 = _conn3.prepareStatement("SELECT COUNT(*) FROM utilizadores WHERE perfil='cliente'");
-        _rs3 = _ps3.executeQuery();
-        if (_rs3.next()) clientesRegistados = _rs3.getInt(1);
-        closeAll(_rs3, _ps3, null);
+        ps = conn.prepareStatement("SELECT COUNT(*) FROM utilizadores WHERE perfil='cliente'");
+        rs = ps.executeQuery();
+        if (rs.next()) clientesRegistados = rs.getInt(1);
+        closeAll(rs, ps, null);
 
         // Ultimas encomendas para o feed
-        _ps3 = _conn3.prepareStatement(
+        ps = conn.prepareStatement(
             "SELECT e.id_encomenda, u.nome, e.data_encomenda, e.total, e.estado " +
             "FROM encomenda e JOIN utilizadores u ON u.id_utilizador=e.id_utilizador " +
             "ORDER BY e.data_encomenda DESC LIMIT 5");
-        _rs3 = _ps3.executeQuery();
-        while (_rs3.next()) {
-            String totalFmt = String.format("%,.2f €", _rs3.getDouble("total")).replace(".", ",");
+        rs = ps.executeQuery();
+        while (rs.next()) {
+            String totalFmt = String.format("%,.2f €", rs.getDouble("total")).replace(".", ",");
             recentOrders.add(new String[]{
-                String.valueOf(_rs3.getInt("id_encomenda")),
-                _rs3.getString("nome"),
-                String.valueOf(_rs3.getTimestamp("data_encomenda")),
+                String.valueOf(rs.getInt("id_encomenda")),
+                rs.getString("nome"),
+                String.valueOf(rs.getTimestamp("data_encomenda")),
                 totalFmt,
-                _rs3.getString("estado")
+                rs.getString("estado")
             });
         }
-        closeAll(_rs3, _ps3, null);
+        closeAll(rs, ps, null);
 
         // Movimentos recentes da carteira
-        _ps3 = _conn3.prepareStatement(
+        ps = conn.prepareStatement(
             "SELECT ac.tipo_operacao, e.codigo_unico, u.nome, ac.data_operacao, ac.valor, ac.id_carteira_origem " +
             "FROM auditoria_carteira ac " +
             "JOIN carteira c ON c.id_carteira = ac.id_carteira_destino OR c.id_carteira = ac.id_carteira_origem " +
             "LEFT JOIN utilizadores u ON u.id_utilizador = c.id_utilizador AND c.is_loja=0 " +
             "LEFT JOIN encomenda e ON e.id_encomenda = ac.id_encomenda " +
             "ORDER BY ac.data_operacao DESC LIMIT 5");
-        _rs3 = _ps3.executeQuery();
-        while (_rs3.next()) {
-            String tipo = _rs3.getString("tipo_operacao");
-            String codigo = _rs3.getString("codigo_unico");
+        rs = ps.executeQuery();
+        while (rs.next()) {
+            String tipo = rs.getString("tipo_operacao");
+            String codigo = rs.getString("codigo_unico");
             if (codigo == null) codigo = "";
-            String nome = _rs3.getString("nome");
+            String nome = rs.getString("nome");
             if (nome == null) nome = "";
-            String dataOp = String.valueOf(_rs3.getTimestamp("data_operacao"));
-            double valor = _rs3.getDouble("valor");
+            String dataOp = String.valueOf(rs.getTimestamp("data_operacao"));
+            double valor = rs.getDouble("valor");
             boolean isDebit = "pagamento".equals(tipo) || "levantamento".equals(tipo);
             String sign = isDebit ? "-" : "+";
             String valorFmt = sign + String.format("%,.2f €", valor).replace(".", ",");
             walletFeed.add(new String[]{tipo, codigo, nome, dataOp, valorFmt});
         }
-    } catch (Exception _e3) {
+    } catch (Exception e) {
         // Pagina carrega com dados vazios em caso de erro
     } finally {
-        closeAll(_rs3, _ps3, _conn3);
+        closeAll(rs, ps, conn);
     }
 
     String activePage = "dashboard";

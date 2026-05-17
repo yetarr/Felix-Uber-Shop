@@ -10,14 +10,17 @@
             StringBuilder sb = new StringBuilder();
             for (byte b : h) sb.append(String.format("%02x", b));
             return sb.toString();
-        } catch (Exception e) { throw new RuntimeException(e); }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 %>
 <%
     // Verificacao de sessao
     HttpSession sess = request.getSession(false);
     if (sess == null || sess.getAttribute("userId") == null) {
-        response.sendRedirect("login.jsp"); return;
+        response.sendRedirect("login.jsp");
+        return;
     }
 
     String clienteName = (String) sess.getAttribute("userName");
@@ -46,14 +49,17 @@
                     Connection conn = getConnection();
                     String sql = "UPDATE utilizadores SET nome = ?, email = ?, telefone = ? WHERE id_utilizador = ?;";
                     PreparedStatement ps = conn.prepareStatement(sql);
-                    ps.setString(1, nome.trim()); ps.setString(2, email.trim());
-                    ps.setString(3, telefone != null ? telefone.trim() : null); ps.setInt(4, userId);
+                    ps.setString(1, nome.trim());
+                    ps.setString(2, email.trim());
+                    ps.setString(3, telefone != null ? telefone.trim() : null);
+                    ps.setInt(4, userId);
                     ps.executeUpdate();
                     sess.setAttribute("userName", nome.trim());
                     sess.setAttribute("userEmail", email.trim());
                     sess.setAttribute("success", "Perfil atualizado com sucesso.");
 
-                    ps.close(); conn.close();
+                    ps.close();
+                    conn.close();
                     response.sendRedirect("perfil.jsp");  // Atualizar pagina
                     return;
                 } catch (Exception e) {
@@ -63,7 +69,7 @@
         } else if ("changePassword".equals(postAction)) { // Operacao de mudar a password
             // Obtencao e validacao da nova password
             String passworNova = request.getParameter("password");
-            String passwordConfirm  = request.getParameter("confirmPassword");
+            String passwordConfirm = request.getParameter("confirmPassword");
             if (passworNova == null || passworNova.isBlank() || passwordConfirm == null || passwordConfirm.isBlank()) {
                 errorMsg = "Preencha todos os campos de password.";
             } else if (passworNova.length() < 6) {
@@ -74,12 +80,14 @@
                     Connection conn = getConnection();
                     String sql = "UPDATE utilizadores SET password_hash = ? WHERE id_utilizador = ?;";
                     PreparedStatement ps = conn.prepareStatement(sql);
-                    ps.setString(1, hashPassword(passworNova)); ps.setInt(2, userId);
+                    ps.setString(1, hashPassword(passworNova));
+                    ps.setInt(2, userId);
                     ps.executeUpdate();
 
                     sess.setAttribute("success", "Password alterada com sucesso.");
 
-                    ps.close(); conn.close();
+                    ps.close();
+                    conn.close();
                     response.sendRedirect("perfil.jsp");  // Atualizar pagina
                     return;
                 } catch (Exception e) {
@@ -112,7 +120,8 @@
             String dr = rs.getString("data_registo");
             membroDesde = (dr != null && dr.length() >= 10) ? dr.substring(0, 10) : (dr != null ? dr : "");
         }
-        rs.close(); ps.close();
+        rs.close();
+        ps.close();
 
         // Execucao de Select para obtencao do saldo do utilizador
         String sql2 = "SELECT saldo FROM carteira WHERE id_utilizador = ?";
@@ -123,7 +132,8 @@
             double s = rs2.getDouble("saldo");
             saldo = String.format("%.2f €", s).replace(".", ",");
         }
-        rs2.close(); ps2.close();
+        rs2.close();
+        ps2.close();
 
         // Execucao de Select para obtencao do numero de encomendas do utilizador
         String sql3 = "SELECT COUNT(*) FROM encomenda WHERE id_utilizador = ?";
@@ -131,7 +141,9 @@
         ps3.setInt(1, (Integer) sess.getAttribute("userId"));
         ResultSet rs3 = ps3.executeQuery();
         if (rs3.next()) totalEnc = String.valueOf(rs3.getInt(1));
-        conn.close(); rs3.close(); ps3.close();
+        conn.close();
+        rs3.close();
+        ps3.close();
     } catch (Exception e) {
         // Ignorar excecao
     }

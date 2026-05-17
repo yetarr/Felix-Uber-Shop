@@ -12,7 +12,10 @@
     int userId = (Integer) session.getAttribute("userId");
     String orderId = request.getParameter("id") != null ? request.getParameter("id") : "0";
     int orderIdInt = 0;
-    try { orderIdInt = Integer.parseInt(orderId); } catch (Exception _ex) {}
+    try {
+        orderIdInt = Integer.parseInt(orderId);
+    } catch (Exception _ex) {
+    }
 
     String successMsg = (String) session.getAttribute("success");
     if (successMsg != null) session.removeAttribute("success");
@@ -20,41 +23,42 @@
 
     // Processar atualizacao dos itens da encomenda
     if ("POST".equalsIgnoreCase(request.getMethod())) {
-        Connection uConn = null;
-        PreparedStatement uPs = null;
+        Connection conn = null;
+        PreparedStatement ps = null;
         ResultSet uRs = null;
         try {
             int oid = Integer.parseInt(request.getParameter("orderId"));
-            uConn = getConnection();
-            uConn.setAutoCommit(false);
+            conn = getConnection();
+            conn.setAutoCommit(false);
 
-            uPs = uConn.prepareStatement(
-                "SELECT estado FROM encomenda WHERE id_encomenda = ? AND id_utilizador = ?");
-            uPs.setInt(1, oid); uPs.setInt(2, userId);
-            uRs = uPs.executeQuery();
+            ps = conn.prepareStatement(
+                    "SELECT estado FROM encomenda WHERE id_encomenda = ? AND id_utilizador = ?");
+            ps.setInt(1, oid);
+            ps.setInt(2, userId);
+            uRs = ps.executeQuery();
             if (!uRs.next()) {
-                uConn.rollback();
+                conn.rollback();
                 errorMsg = "Encomenda não encontrada.";
             } else if (!"pendente".equals(uRs.getString("estado"))) {
-                uConn.rollback();
+                conn.rollback();
                 errorMsg = "Só é possível editar encomendas pendentes.";
             } else {
-                closeAll(uRs, uPs, null);
+                closeAll(uRs, ps, null);
 
-                uPs = uConn.prepareStatement("SELECT saldo FROM carteira WHERE id_utilizador = ?");
-                uPs.setInt(1, userId);
-                uRs = uPs.executeQuery();
+                ps = conn.prepareStatement("SELECT saldo FROM carteira WHERE id_utilizador = ?");
+                ps.setInt(1, userId);
+                uRs = ps.executeQuery();
                 double saldoActual = uRs.next() ? uRs.getDouble("saldo") : 0;
-                closeAll(uRs, uPs, null);
+                closeAll(uRs, ps, null);
 
-                uPs = uConn.prepareStatement("DELETE FROM encomenda_produto WHERE id_encomenda = ?");
-                uPs.setInt(1, oid);
-                uPs.executeUpdate();
-                closeAll(null, uPs, null);
+                ps = conn.prepareStatement("DELETE FROM encomenda_produto WHERE id_encomenda = ?");
+                ps.setInt(1, oid);
+                ps.executeUpdate();
+                closeAll(null, ps, null);
 
                 double total = 0;
                 int itemsCount = 0;
-                for (java.util.Enumeration<String> params = request.getParameterNames(); params.hasMoreElements();) {
+                for (java.util.Enumeration<String> params = request.getParameterNames(); params.hasMoreElements(); ) {
                     String param = params.nextElement();
                     if (!param.startsWith("produto_")) continue;
                     int pid;
@@ -62,53 +66,58 @@
                     try {
                         pid = Integer.parseInt(param.substring("produto_".length()));
                         qty = Integer.parseInt(request.getParameter(param));
-                    } catch (NumberFormatException nfe) { continue; }
+                    } catch (NumberFormatException nfe) {
+                        continue;
+                    }
                     if (qty <= 0) continue;
 
-                    uPs = uConn.prepareStatement(
-                        "SELECT p.preco, COALESCE(MAX(pr.desconto_percentagem),0) AS desc_pct " +
-                        "FROM produtos p " +
-                        "LEFT JOIN promocao_produto pp ON pp.id_produto = p.id_produto " +
-                        "LEFT JOIN promocoes pr ON pr.id_promocao = pp.id_promocao " +
-                        "  AND pr.ativo = 1 AND CURDATE() BETWEEN pr.data_inicio AND pr.data_fim " +
-                        "WHERE p.id_produto = ? AND p.ativo = 1 " +
-                        "GROUP BY p.id_produto, p.preco");
-                    uPs.setInt(1, pid);
-                    uRs = uPs.executeQuery();
-                    if (!uRs.next()) { closeAll(uRs, uPs, null); continue; }
+                    ps = conn.prepareStatement(
+                            "SELECT p.preco, COALESCE(MAX(pr.desconto_percentagem),0) AS desc_pct " +
+                                    "FROM produtos p " +
+                                    "LEFT JOIN promocao_produto pp ON pp.id_produto = p.id_produto " +
+                                    "LEFT JOIN promocoes pr ON pr.id_promocao = pp.id_promocao " +
+                                    "  AND pr.ativo = 1 AND CURDATE() BETWEEN pr.data_inicio AND pr.data_fim " +
+                                    "WHERE p.id_produto = ? AND p.ativo = 1 " +
+                                    "GROUP BY p.id_produto, p.preco");
+                    ps.setInt(1, pid);
+                    uRs = ps.executeQuery();
+                    if (!uRs.next()) {
+                        closeAll(uRs, ps, null);
+                        continue;
+                    }
                     double preco = uRs.getDouble("preco");
                     double desc = uRs.getDouble("desc_pct");
                     double precoFinal = Math.round(preco * (100.0 - desc)) / 100.0;
-                    closeAll(uRs, uPs, null);
+                    closeAll(uRs, ps, null);
 
-                    uPs = uConn.prepareStatement(
-                        "INSERT INTO encomenda_produto (id_encomenda, id_produto, quantidade, preco_unitario) " +
-                        "VALUES (?, ?, ?, ?)");
-                    uPs.setInt(1, oid);
-                    uPs.setInt(2, pid);
-                    uPs.setInt(3, qty);
-                    uPs.setDouble(4, precoFinal);
-                    uPs.executeUpdate();
-                    closeAll(null, uPs, null);
+                    ps = conn.prepareStatement(
+                            "INSERT INTO encomenda_produto (id_encomenda, id_produto, quantidade, preco_unitario) " +
+                                    "VALUES (?, ?, ?, ?)");
+                    ps.setInt(1, oid);
+                    ps.setInt(2, pid);
+                    ps.setInt(3, qty);
+                    ps.setDouble(4, precoFinal);
+                    ps.executeUpdate();
+                    closeAll(null, ps, null);
 
                     total += precoFinal * qty;
                     itemsCount++;
                 }
 
                 if (itemsCount == 0) {
-                    uConn.rollback();
+                    conn.rollback();
                     errorMsg = "A encomenda deve conter pelo menos um produto.";
                 } else if (total > saldoActual) {
-                    uConn.rollback();
+                    conn.rollback();
                     errorMsg = "Saldo insuficiente para concluir a encomenda.";
                 } else {
-                    uPs = uConn.prepareStatement("UPDATE encomenda SET total = ? WHERE id_encomenda = ?");
-                    uPs.setDouble(1, total);
-                    uPs.setInt(2, oid);
-                    uPs.executeUpdate();
-                    closeAll(null, uPs, null);
+                    ps = conn.prepareStatement("UPDATE encomenda SET total = ? WHERE id_encomenda = ?");
+                    ps.setDouble(1, total);
+                    ps.setInt(2, oid);
+                    ps.executeUpdate();
+                    closeAll(null, ps, null);
 
-                    uConn.commit();
+                    conn.commit();
                     session.setAttribute("success", "Encomenda atualizada com sucesso.");
                     response.sendRedirect("editarEncomenda.jsp?id=" + oid);
                     return;
@@ -116,10 +125,16 @@
             }
         } catch (Exception e) {
             errorMsg = "Erro: " + e.getMessage();
-            if (uConn != null) try { uConn.rollback(); } catch (SQLException ignored) {}
+            if (conn != null) try {
+                conn.rollback();
+            } catch (SQLException ignored) {
+            }
         } finally {
-            if (uConn != null) try { uConn.setAutoCommit(true); } catch (SQLException ignored) {}
-            closeAll(uRs, uPs, uConn);
+            if (conn != null) try {
+                conn.setAutoCommit(true);
+            } catch (SQLException ignored) {
+            }
+            closeAll(uRs, ps, conn);
         }
     }
 
@@ -136,7 +151,7 @@
 
         // Verificar estado da encomenda
         ps = conn.prepareStatement(
-            "SELECT estado FROM encomenda WHERE id_encomenda = ? AND id_utilizador = ?");
+                "SELECT estado FROM encomenda WHERE id_encomenda = ? AND id_utilizador = ?");
         ps.setInt(1, orderIdInt);
         ps.setInt(2, userId);
         rs = ps.executeQuery();
@@ -157,34 +172,34 @@
 
         // Carregar catalogo de produtos disponiveis com descontos
         ps = conn.prepareStatement(
-            "SELECT p.id_produto, p.nome, p.categoria, " +
-            "CAST(p.preco*100 AS SIGNED) AS preco_orig_cents, " +
-            "COALESCE(MAX(pr.desconto_percentagem),0) AS desc_pct, " +
-            "COALESCE(ep.quantidade,0) AS qty_atual " +
-            "FROM produtos p " +
-            "LEFT JOIN promocao_produto pp ON pp.id_produto = p.id_produto " +
-            "LEFT JOIN promocoes pr ON pr.id_promocao = pp.id_promocao " +
-            "  AND pr.ativo = 1 AND CURDATE() BETWEEN pr.data_inicio AND pr.data_fim " +
-            "LEFT JOIN encomenda_produto ep ON ep.id_produto = p.id_produto AND ep.id_encomenda = ? " +
-            "WHERE p.ativo = 1 " +
-            "GROUP BY p.id_produto, p.nome, p.categoria, p.preco, ep.quantidade " +
-            "ORDER BY p.nome");
+                "SELECT p.id_produto, p.nome, p.categoria, " +
+                        "CAST(p.preco*100 AS SIGNED) AS preco_orig_cents, " +
+                        "COALESCE(MAX(pr.desconto_percentagem),0) AS desc_pct, " +
+                        "COALESCE(ep.quantidade,0) AS qty_atual " +
+                        "FROM produtos p " +
+                        "LEFT JOIN promocao_produto pp ON pp.id_produto = p.id_produto " +
+                        "LEFT JOIN promocoes pr ON pr.id_promocao = pp.id_promocao " +
+                        "  AND pr.ativo = 1 AND CURDATE() BETWEEN pr.data_inicio AND pr.data_fim " +
+                        "LEFT JOIN encomenda_produto ep ON ep.id_produto = p.id_produto AND ep.id_encomenda = ? " +
+                        "WHERE p.ativo = 1 " +
+                        "GROUP BY p.id_produto, p.nome, p.categoria, p.preco, ep.quantidade " +
+                        "ORDER BY p.nome");
         ps.setInt(1, orderIdInt);
         rs = ps.executeQuery();
         while (rs.next()) {
             int priceOrig = (int) rs.getLong("preco_orig_cents");
             int discPct = (int) Math.round(rs.getDouble("desc_pct"));
             int priceFinal = discPct > 0
-                ? (int) Math.round(priceOrig * (100.0 - discPct) / 100.0)
-                : priceOrig;
+                    ? (int) Math.round(priceOrig * (100.0 - discPct) / 100.0)
+                    : priceOrig;
             catalogue.add(new Object[]{
-                String.valueOf(rs.getInt("id_produto")),
-                rs.getString("nome"),
-                rs.getString("categoria") != null ? rs.getString("categoria") : "",
-                priceFinal,
-                discPct,
-                rs.getInt("qty_atual"),
-                priceOrig
+                    String.valueOf(rs.getInt("id_produto")),
+                    rs.getString("nome"),
+                    rs.getString("categoria") != null ? rs.getString("categoria") : "",
+                    priceFinal,
+                    discPct,
+                    rs.getInt("qty_atual"),
+                    priceOrig
             });
         }
     } catch (Exception e) {
@@ -201,7 +216,8 @@
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>FelixUberShop – Editar Encomenda #<%= orderId %></title>
+    <title>FelixUberShop – Editar Encomenda #<%= orderId %>
+    </title>
     <style>
         *, *::before, *::after {
             box-sizing: border-box;
@@ -868,7 +884,8 @@
             <svg viewBox="0 0 24 24">
                 <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
             </svg>
-            Olá, <strong style="color:#e0e0e0;margin-left:4px;"><%= clienteName %></strong>
+            Olá, <strong style="color:#e0e0e0;margin-left:4px;"><%= clienteName %>
+        </strong>
         </div>
         <a href="logout.jsp" class="btn-sair">Sair</a>
     </div>
@@ -978,7 +995,8 @@
                             </svg>
                             <span>foto</span>
                         </div>
-                        <div class="product-name"><%= pname %></div>
+                        <div class="product-name"><%= pname %>
+                        </div>
                         <div class="product-price-row">
                             <span class="product-price"><%= priceStr %></span>
                             <% if (disc > 0) { %>
@@ -987,10 +1005,12 @@
                         </div>
                         <div class="stepper">
                             <button type="button" <%= disabledAttr %>
-                                    onclick="changeQty('<%= pid %>',-1,<%= price %>,'<%= safeName %>')">&#8722;</button>
+                                    onclick="changeQty('<%= pid %>',-1,<%= price %>,'<%= safeName %>')">&#8722;
+                            </button>
                             <span class="qty-val" id="qty-<%= pid %>"><%= curQty %></span>
                             <button type="button" <%= disabledAttr %>
-                                    onclick="changeQty('<%= pid %>',1,<%= price %>,'<%= safeName %>')">&#43;</button>
+                                    onclick="changeQty('<%= pid %>',1,<%= price %>,'<%= safeName %>')">&#43;
+                            </button>
                         </div>
                     </div>
                     <% } %>
@@ -1021,7 +1041,8 @@
                               onsubmit="return prepareSubmit()">
                             <input type="hidden" name="orderId" value="<%= orderId %>"/>
                             <div id="hiddenInputs"></div>
-                            <button type="submit" class="btn-confirmar" id="btnConfirmar" <%= isEditable ? "" : "disabled" %>>
+                            <button type="submit" class="btn-confirmar"
+                                    id="btnConfirmar" <%= isEditable ? "" : "disabled" %>>
                                 Confirmar encomenda
                             </button>
                         </form>
@@ -1046,7 +1067,10 @@
                     <%
                         boolean anyPromo = false;
                         for (Object[] p : catalogue) {
-                            if ((Integer) p[4] > 0) { anyPromo = true; break; }
+                            if ((Integer) p[4] > 0) {
+                                anyPromo = true;
+                                break;
+                            }
                         }
                     %>
                     <% if (!anyPromo) { %>
@@ -1130,10 +1154,10 @@
             const sub = item.price * item.qty;
             total += sub;
             html += '<div class="order-item">' +
-                    '<span><span class="iname">' + item.name + '</span>' +
-                    '<span class="iqty">× ' + item.qty + '</span></span>' +
-                    '<span class="iprice">' + fmt(sub) + '</span>' +
-                    '</div>';
+                '<span><span class="iname">' + item.name + '</span>' +
+                '<span class="iqty">× ' + item.qty + '</span></span>' +
+                '<span class="iprice">' + fmt(sub) + '</span>' +
+                '</div>';
         });
         box.innerHTML = html;
         document.getElementById('totalValue').textContent = fmt(total);

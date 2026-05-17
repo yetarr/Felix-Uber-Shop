@@ -1,11 +1,18 @@
 ﻿<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*" %>
+<%@ page import="java.sql.*" %>
 <%@ include file="../basedados/basedados.h" %>
 <%
     // Verificacao da sessao e perfil de administrador
     HttpSession sess = request.getSession(false);
-    if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
-    if (!"administrador".equalsIgnoreCase((String) sess.getAttribute("userRole"))) { response.sendRedirect("dashboard.jsp"); return; }
+    if (sess == null || sess.getAttribute("userId") == null) {
+        response.sendRedirect("login.jsp");
+        return;
+    }
+    if (!"administrador".equalsIgnoreCase((String) sess.getAttribute("userRole"))) {
+        response.sendRedirect("dashboard.jsp");
+        return;
+    }
     String adminName = (String) sess.getAttribute("userName");
 
     String successMsg = (String) sess.getAttribute("success");
@@ -24,35 +31,68 @@
             double valor = Double.parseDouble(valorStr.replace(",", "."));
             if (valor <= 0) throw new Exception("O valor deve ser superior a 0.");
 
-            Connection connPost = getConnection();
-            PreparedStatement psPost = connPost.prepareStatement("SELECT id_carteira FROM carteira WHERE id_utilizador = ?");
-            psPost.setInt(1, clienteId); ResultSet rsPost = psPost.executeQuery();
-            int clienteCartId = rsPost.next() ? rsPost.getInt("id_carteira") : -1; rsPost.close(); psPost.close();
-            psPost = connPost.prepareStatement("SELECT id_carteira FROM carteira WHERE is_loja = 1 LIMIT 1");
-            rsPost = psPost.executeQuery(); int lojaCartId = rsPost.next() ? rsPost.getInt("id_carteira") : -1; rsPost.close(); psPost.close();
+            Connection conn = getConnection();
+            PreparedStatement ps = conn.prepareStatement("SELECT id_carteira FROM carteira WHERE id_utilizador = ?");
+            ps.setInt(1, clienteId);
+            ResultSet rs = ps.executeQuery();
+            int clienteCartId = rs.next() ? rs.getInt("id_carteira") : -1;
+            rs.close();
+            ps.close();
+
+            ps = conn.prepareStatement("SELECT id_carteira FROM carteira WHERE is_loja = 1 LIMIT 1");
+            rs = ps.executeQuery();
+            int lojaCartId = rs.next() ? rs.getInt("id_carteira") : -1;
+            rs.close();
+            ps.close();
+
             if (clienteCartId < 0) throw new Exception("Carteira do cliente não encontrada.");
 
             if ("adicionar".equals(acao)) {
-                psPost = connPost.prepareStatement("UPDATE carteira SET saldo = saldo + ? WHERE id_carteira = ?");
-                psPost.setDouble(1, valor); psPost.setInt(2, clienteCartId); psPost.executeUpdate(); psPost.close();
-                psPost = connPost.prepareStatement("INSERT INTO auditoria_carteira (id_carteira_origem, id_carteira_destino, valor, tipo_operacao, descricao) VALUES (?,?,?,'deposito',?)");
-                psPost.setInt(1, lojaCartId); psPost.setInt(2, clienteCartId); psPost.setDouble(3, valor);
-                psPost.setString(4, "Depósito via administrador"); psPost.executeUpdate(); closeAll(null, psPost, connPost);
+                ps = conn.prepareStatement("UPDATE carteira SET saldo = saldo + ? WHERE id_carteira = ?");
+                ps.setDouble(1, valor);
+                ps.setInt(2, clienteCartId);
+                ps.executeUpdate();
+                ps.close();
+
+                ps = conn.prepareStatement("INSERT INTO auditoria_carteira (id_carteira_origem, id_carteira_destino, valor, tipo_operacao, descricao) VALUES (?,?,?,'deposito',?)");
+                ps.setInt(1, lojaCartId);
+                ps.setInt(2, clienteCartId);
+                ps.setDouble(3, valor);
+                ps.setString(4, "Depósito via administrador");
+                ps.executeUpdate();
+                closeAll(null, ps, conn);
+
                 sess.setAttribute("success", String.format("Depósito de %.2f € adicionado.", valor).replace(".", ","));
             } else if ("retirar".equals(acao)) {
-                psPost = connPost.prepareStatement("SELECT saldo FROM carteira WHERE id_carteira = ?");
-                psPost.setInt(1, clienteCartId); rsPost = psPost.executeQuery();
-                double saldoAtual = rsPost.next() ? rsPost.getDouble("saldo") : 0; rsPost.close(); psPost.close();
+                ps = conn.prepareStatement("SELECT saldo FROM carteira WHERE id_carteira = ?");
+                ps.setInt(1, clienteCartId);
+                rs = ps.executeQuery();
+                double saldoAtual = rs.next() ? rs.getDouble("saldo") : 0;
+                rs.close();
+                ps.close();
+
                 if (valor > saldoAtual) throw new Exception("Saldo insuficiente.");
-                psPost = connPost.prepareStatement("UPDATE carteira SET saldo = saldo - ? WHERE id_carteira = ?");
-                psPost.setDouble(1, valor); psPost.setInt(2, clienteCartId); psPost.executeUpdate(); psPost.close();
-                psPost = connPost.prepareStatement("INSERT INTO auditoria_carteira (id_carteira_origem, id_carteira_destino, valor, tipo_operacao, descricao) VALUES (?,?,?,'levantamento',?)");
-                psPost.setInt(1, clienteCartId); psPost.setInt(2, lojaCartId); psPost.setDouble(3, valor);
-                psPost.setString(4, "Retirada via administrador"); psPost.executeUpdate(); closeAll(null, psPost, connPost);
+                ps = conn.prepareStatement("UPDATE carteira SET saldo = saldo - ? WHERE id_carteira = ?");
+                ps.setDouble(1, valor);
+                ps.setInt(2, clienteCartId);
+                ps.executeUpdate();
+                ps.close();
+
+                ps = conn.prepareStatement("INSERT INTO auditoria_carteira (id_carteira_origem, id_carteira_destino, valor, tipo_operacao, descricao) VALUES (?,?,?,'levantamento',?)");
+                ps.setInt(1, clienteCartId);
+                ps.setInt(2, lojaCartId);
+                ps.setDouble(3, valor);
+                ps.setString(4, "Retirada via administrador");
+                ps.executeUpdate();
+                closeAll(null, ps, conn);
+
                 sess.setAttribute("success", String.format("Saldo de %.2f € retirado.", valor).replace(".", ","));
             }
-            response.sendRedirect("saldoClientesAdmin.jsp?clienteId=" + clienteId); return;
-        } catch (Exception e) { errorMsg = e.getMessage(); }
+            response.sendRedirect("saldoClientesAdmin.jsp?clienteId=" + clienteId);
+            return;
+        } catch (Exception e) {
+            errorMsg = e.getMessage();
+        }
     }
 
     // Carregar lista de clientes ativos com saldo
@@ -64,20 +104,20 @@
     try {
         conn = getConnection();
         ps = conn.prepareStatement(
-            "SELECT u.id_utilizador, u.nome, u.email, COALESCE(c.saldo, 0) as saldo" +
-            " FROM utilizadores u" +
-            " LEFT JOIN carteira c ON c.id_utilizador = u.id_utilizador" +
-            " WHERE u.perfil = 'cliente' AND u.ativo = 1" +
-            " ORDER BY u.nome");
+                "SELECT u.id_utilizador, u.nome, u.email, COALESCE(c.saldo, 0) as saldo" +
+                        " FROM utilizadores u" +
+                        " LEFT JOIN carteira c ON c.id_utilizador = u.id_utilizador" +
+                        " WHERE u.perfil = 'cliente' AND u.ativo = 1" +
+                        " ORDER BY u.nome");
         rs = ps.executeQuery();
         while (rs.next()) {
             double saldo = rs.getDouble("saldo");
-            int saldoCents = (int)(saldo * 100);
+            int saldoCents = (int) (saldo * 100);
             clients.add(new Object[]{
-                String.valueOf(rs.getInt("id_utilizador")),
-                rs.getString("nome"),
-                rs.getString("email"),
-                saldoCents
+                    String.valueOf(rs.getInt("id_utilizador")),
+                    rs.getString("nome"),
+                    rs.getString("email"),
+                    saldoCents
             });
         }
     } catch (Exception e) {
@@ -92,13 +132,13 @@
     }
     if (selectedId == null) selectedId = "";
 
-    String selName  = "";
+    String selName = "";
     String selEmail = "";
-    int    selSaldo = 0;
+    int selSaldo = 0;
     for (Object[] c : clients) {
         if (c[0].equals(selectedId)) {
-            selName  = (String)  c[1];
-            selEmail = (String)  c[2];
+            selName = (String) c[1];
+            selEmail = (String) c[2];
             selSaldo = (Integer) c[3];
             break;
         }
@@ -625,7 +665,8 @@
             <svg viewBox="0 0 24 24">
                 <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
             </svg>
-            Olá, <strong style="color:#e0e0e0;margin-left:4px;"><%= adminName %></strong>
+            Olá, <strong style="color:#e0e0e0;margin-left:4px;"><%= adminName %>
+        </strong>
         </div>
         <a href="login.jsp" class="btn-sair">Sair</a>
     </div>
@@ -743,10 +784,10 @@
                     <tbody>
                     <%
                         for (Object[] c : clients) {
-                            String cid    = (String)  c[0];
-                            String cname  = (String)  c[1];
-                            String cemail = (String)  c[2];
-                            int    csaldo = (Integer) c[3];
+                            String cid = (String) c[0];
+                            String cname = (String) c[1];
+                            String cemail = (String) c[2];
+                            int csaldo = (Integer) c[3];
 
                             boolean isSelected = cid.equals(selectedId);
                             String saldoStr = String.format("%d,%02d €", csaldo / 100, csaldo % 100);
@@ -755,9 +796,12 @@
                         data-name="<%= cname.toLowerCase() %>"
                         data-email="<%= cemail.toLowerCase() %>"
                         onclick="selectClient('<%= cid %>','<%= cname %>','<%= cemail %>',<%= csaldo %>)">
-                        <td class="client-name-cell"><%= cname %></td>
-                        <td><%= cemail %></td>
-                        <td class="saldo-cell"><%= saldoStr %></td>
+                        <td class="client-name-cell"><%= cname %>
+                        </td>
+                        <td><%= cemail %>
+                        </td>
+                        <td class="saldo-cell"><%= saldoStr %>
+                        </td>
                         <td>
                             <button class="btn-sel <%= isSelected ? "active" : "" %>"
                                     id="selbtn-<%= cid %>"
@@ -845,7 +889,7 @@
 </div>
 
 <script>
-    let currentId    = '<%= selectedId %>';
+    let currentId = '<%= selectedId %>';
     let currentSaldo = <%= selSaldo %>;
 
     function selectClient(id, name, email, saldoCents) {
@@ -874,7 +918,7 @@
         const selBtn = document.getElementById('selbtn-' + id);
         if (selBtn) selBtn.classList.add('active');
 
-        currentId    = id;
+        currentId = id;
         currentSaldo = saldoCents;
         document.getElementById('addValor').value = '';
         document.getElementById('remValor').value = '';
@@ -897,17 +941,17 @@
         }
 
         const name = document.getElementById('selName').textContent;
-        const msg  = type === 'adicionar'
+        const msg = type === 'adicionar'
             ? `Adicionar ${val.toFixed(2).replace('.', ',')} € ao saldo de ${name}?`
             : `Retirar ${val.toFixed(2).replace('.', ',')} € do saldo de ${name}?`;
         return confirm(msg);
     }
 
     function filterTable() {
-        const q    = document.getElementById('searchInput').value.toLowerCase();
+        const q = document.getElementById('searchInput').value.toLowerCase();
         const rows = document.querySelectorAll('#clientsTable tbody tr');
         rows.forEach(row => {
-            const name  = row.dataset.name  || '';
+            const name = row.dataset.name || '';
             const email = row.dataset.email || '';
             row.style.display = (name.includes(q) || email.includes(q)) ? '' : 'none';
         });

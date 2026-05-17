@@ -5,8 +5,14 @@
 <%
     // Verificacao da sessao e papel de administrador
     HttpSession sess = request.getSession(false);
-    if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
-    if (!"administrador".equalsIgnoreCase((String) sess.getAttribute("userRole"))) { response.sendRedirect("dashboard.jsp"); return; }
+    if (sess == null || sess.getAttribute("userId") == null) {
+        response.sendRedirect("login.jsp");
+        return;
+    }
+    if (!"administrador".equalsIgnoreCase((String) sess.getAttribute("userRole"))) {
+        response.sendRedirect("dashboard.jsp");
+        return;
+    }
 
     String adminName = (String) sess.getAttribute("userName");
 
@@ -14,47 +20,51 @@
     if ("POST".equalsIgnoreCase(request.getMethod()) && "validar".equals(request.getParameter("action"))) {
         String eid = request.getParameter("id");
         try {
-            Connection _vc = getConnection();
-            PreparedStatement _vps = _vc.prepareStatement(
-                "UPDATE encomenda SET estado='pronto' WHERE id_encomenda=? AND estado='pendente'");
-            _vps.setInt(1, Integer.parseInt(eid));
-            int rows = _vps.executeUpdate();
-            closeAll(null, _vps, _vc);
+            Connection conn = getConnection();
+            PreparedStatement ps = conn.prepareStatement(
+                    "UPDATE encomenda SET estado='pronto' WHERE id_encomenda=? AND estado='pendente'");
+            ps.setInt(1, Integer.parseInt(eid));
+            int rows = ps.executeUpdate();
+            closeAll(null, ps, conn);
             sess.setAttribute("success", rows > 0 ? "Encomenda #" + eid + " confirmada com sucesso." : "Encomenda não encontrada ou já confirmada.");
         } catch (Exception _ve) {
             sess.setAttribute("errorMsg", "Erro: " + _ve.getMessage());
         }
-        response.sendRedirect("encomendasAdmin.jsp"); return;
+        response.sendRedirect("encomendasAdmin.jsp");
+        return;
     }
 
     // Acao de cancelar encomenda pelo administrador
     if ("POST".equalsIgnoreCase(request.getMethod()) && "cancelar".equals(request.getParameter("action"))) {
         String eid = request.getParameter("id");
         try {
-            Connection _vc = getConnection();
-            PreparedStatement _vps = _vc.prepareStatement(
-                "UPDATE encomenda SET estado='cancelado' WHERE id_encomenda=? AND estado IN ('pendente','processando','pronto')");
-            _vps.setInt(1, Integer.parseInt(eid));
-            int rows = _vps.executeUpdate();
-            closeAll(null, _vps, _vc);
+            Connection conn = getConnection();
+            PreparedStatement ps = conn.prepareStatement(
+                    "UPDATE encomenda SET estado='cancelado' WHERE id_encomenda=? AND estado IN ('pendente','processando','pronto')");
+            ps.setInt(1, Integer.parseInt(eid));
+            int rows = ps.executeUpdate();
+            closeAll(null, ps, conn);
             sess.setAttribute("success", rows > 0 ? "Encomenda #" + eid + " cancelada." : "Encomenda não encontrada ou já cancelada.");
         } catch (Exception _ve) {
             sess.setAttribute("errorMsg", "Erro: " + _ve.getMessage());
         }
-        response.sendRedirect("encomendasAdmin.jsp"); return;
+        response.sendRedirect("encomendasAdmin.jsp");
+        return;
     }
 
     // Parametros de filtro para a listagem
     String filterCliente = request.getParameter("cliente") != null ? request.getParameter("cliente") : "";
-    String filterEstado  = request.getParameter("estado")  != null ? request.getParameter("estado")  : "";
-    String filterData    = request.getParameter("data")    != null ? request.getParameter("data")    : "2026-05-04";
+    String filterEstado = request.getParameter("estado") != null ? request.getParameter("estado") : "";
+    String filterData = request.getParameter("data") != null ? request.getParameter("data") : "2026-05-04";
 
     // Listas de encomendas e respetivos detalhes de itens
     List<String[]> allOrders = new ArrayList<>();
     Map<String, String[][]> details = new LinkedHashMap<>();
 
-    String successMsg = (String) sess.getAttribute("success"); if (successMsg != null) sess.removeAttribute("success");
-    String errorMsg   = (String) sess.getAttribute("errorMsg"); if (errorMsg != null) sess.removeAttribute("errorMsg");
+    String successMsg = (String) sess.getAttribute("success");
+    if (successMsg != null) sess.removeAttribute("success");
+    String errorMsg = (String) sess.getAttribute("errorMsg");
+    if (errorMsg != null) sess.removeAttribute("errorMsg");
 
     String openDetail = request.getParameter("detalhe");
 
@@ -66,10 +76,10 @@
 
         // Carregar todas as encomendas com filtros opcionais
         String sql = "SELECT e.id_encomenda, u.nome, e.data_encomenda, e.total, e.estado " +
-                     "FROM encomenda e JOIN utilizadores u ON u.id_utilizador = e.id_utilizador " +
-                     "WHERE (u.nome LIKE ? OR ? = '') " +
-                     "  AND (e.estado = ? OR ? = '') " +
-                     "ORDER BY e.data_encomenda DESC";
+                "FROM encomenda e JOIN utilizadores u ON u.id_utilizador = e.id_utilizador " +
+                "WHERE (u.nome LIKE ? OR ? = '') " +
+                "  AND (e.estado = ? OR ? = '') " +
+                "ORDER BY e.data_encomenda DESC";
         ps = conn.prepareStatement(sql);
         String likeCliente = filterCliente.isEmpty() ? "" : "%" + filterCliente + "%";
         ps.setString(1, likeCliente);
@@ -78,15 +88,16 @@
         ps.setString(4, filterEstado);
         rs = ps.executeQuery();
         while (rs.next()) {
-            String id     = rs.getString("id_encomenda");
-            String nome   = rs.getString("nome");
-            String data   = rs.getString("data_encomenda");
-            String total  = String.format("%.2f €", rs.getDouble("total")).replace(".", ",");
+            String id = rs.getString("id_encomenda");
+            String nome = rs.getString("nome");
+            String data = rs.getString("data_encomenda");
+            String total = String.format("%.2f €", rs.getDouble("total")).replace(".", ",");
             String estado = rs.getString("estado");
             allOrders.add(new String[]{id, nome, data, total, estado});
         }
         closeAll(rs, ps, null);
-        rs = null; ps = null;
+        rs = null;
+        ps = null;
 
         // Determinar qual encomenda abrir por defeito
         if (openDetail == null && !allOrders.isEmpty()) openDetail = allOrders.get(0)[0];
@@ -94,17 +105,17 @@
         // Carregar itens da encomenda aberta
         if (openDetail != null && !openDetail.isEmpty()) {
             String sqlItems = "SELECT p.nome, ep.preco_unitario, ep.quantidade " +
-                              "FROM encomenda_produto ep JOIN produtos p ON p.id_produto = ep.id_produto " +
-                              "WHERE ep.id_encomenda = ?";
+                    "FROM encomenda_produto ep JOIN produtos p ON p.id_produto = ep.id_produto " +
+                    "WHERE ep.id_encomenda = ?";
             ps = conn.prepareStatement(sqlItems);
             ps.setInt(1, Integer.parseInt(openDetail));
             rs = ps.executeQuery();
             List<String[]> itemsList = new ArrayList<>();
             while (rs.next()) {
-                String nome        = rs.getString("nome");
-                double preco       = rs.getDouble("preco_unitario");
-                int    qty         = rs.getInt("quantidade");
-                String fmtPreco    = String.format("%.2f €", preco).replace(".", ",");
+                String nome = rs.getString("nome");
+                double preco = rs.getDouble("preco_unitario");
+                int qty = rs.getInt("quantidade");
+                String fmtPreco = String.format("%.2f €", preco).replace(".", ",");
                 String fmtSubtotal = String.format("%.2f €", preco * qty).replace(".", ",");
                 itemsList.add(new String[]{nome, fmtPreco, String.valueOf(qty), fmtSubtotal});
             }
@@ -818,7 +829,8 @@
             <svg viewBox="0 0 24 24">
                 <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
             </svg>
-            Olá, <strong style="color:#e0e0e0;margin-left:4px;"><%= adminName %></strong>
+            Olá, <strong style="color:#e0e0e0;margin-left:4px;"><%= adminName %>
+        </strong>
         </div>
         <a href="login.jsp" class="btn-sair">Sair</a>
     </div>
@@ -953,11 +965,18 @@
                         </svg>
                     </span>
                     <select name="estado" class="filter-select">
-                        <option value=""            <%= "".equals(filterEstado)              ? "selected" : "" %>>Todos os estados</option>
-                        <option value="pendente"    <%= "pendente".equals(filterEstado)    ? "selected" : "" %>>Pendente</option>
-                        <option value="processando" <%= "processando".equals(filterEstado) ? "selected" : "" %>>Processando</option>
-                        <option value="pronto"      <%= "pronto".equals(filterEstado)      ? "selected" : "" %>>Pronto</option>
-                        <option value="cancelado"   <%= "cancelado".equals(filterEstado)   ? "selected" : "" %>>Cancelado</option>
+                        <option value=""            <%= "".equals(filterEstado) ? "selected" : "" %>>Todos os estados
+                        </option>
+                        <option value="pendente"    <%= "pendente".equals(filterEstado) ? "selected" : "" %>>Pendente
+                        </option>
+                        <option value="processando" <%= "processando".equals(filterEstado) ? "selected" : "" %>>
+                            Processando
+                        </option>
+                        <option value="pronto"      <%= "pronto".equals(filterEstado) ? "selected" : "" %>>Pronto
+                        </option>
+                        <option value="cancelado"   <%= "cancelado".equals(filterEstado) ? "selected" : "" %>>
+                            Cancelado
+                        </option>
                     </select>
                 </div>
 
@@ -1011,20 +1030,21 @@
                 <tbody>
                 <%
                     for (String[] o : allOrders) {
-                        String oid   = o[0];
-                        String ocli  = o[1];
+                        String oid = o[0];
+                        String ocli = o[1];
                         String odate = o[2];
-                        String otot  = o[3];
+                        String otot = o[3];
                         String ostat = o[4];
 
                         String badgeClass = "badge-confirmada";
-                        if ("pendente".equalsIgnoreCase(ostat) || "processando".equalsIgnoreCase(ostat)) badgeClass = "badge-pendente";
+                        if ("pendente".equalsIgnoreCase(ostat) || "processando".equalsIgnoreCase(ostat))
+                            badgeClass = "badge-pendente";
                         if ("cancelado".equalsIgnoreCase(ostat)) badgeClass = "badge-cancelada";
 
-                        boolean isPendente   = "pendente".equalsIgnoreCase(ostat) || "processando".equalsIgnoreCase(ostat);
+                        boolean isPendente = "pendente".equalsIgnoreCase(ostat) || "processando".equalsIgnoreCase(ostat);
                         boolean isConfirmada = "pronto".equalsIgnoreCase(ostat);
-                        boolean isCancelada  = "cancelado".equalsIgnoreCase(ostat);
-                        boolean isOpen       = oid.equals(openDetail);
+                        boolean isCancelada = "cancelado".equalsIgnoreCase(ostat);
+                        boolean isOpen = oid.equals(openDetail);
 
                         String[] parts = ocli.split(" ");
                         String initials = parts.length >= 2
@@ -1033,15 +1053,19 @@
                 %>
                 <tr class="<%= isOpen ? "active-row" : "" %>"
                     onclick="toggleDetail('<%= oid %>')" style="cursor:pointer;">
-                    <td class="order-id">#<%= oid %></td>
+                    <td class="order-id">#<%= oid %>
+                    </td>
                     <td>
                         <div class="client-cell">
-                            <div class="avatar-sm"><%= initials %></div>
+                            <div class="avatar-sm"><%= initials %>
+                            </div>
                             <%= ocli %>
                         </div>
                     </td>
-                    <td><%= odate %></td>
-                    <td><strong><%= otot %></strong></td>
+                    <td><%= odate %>
+                    </td>
+                    <td><strong><%= otot %>
+                    </strong></td>
                     <td><span class="badge <%= badgeClass %>"><%= ostat %></span></td>
                     <td onclick="event.stopPropagation()">
                         <div class="action-btns">
@@ -1075,10 +1099,10 @@
         <!-- DETAIL PANELS -->
         <%
             for (String[] o : allOrders) {
-                String oid   = o[0];
-                String ocli  = o[1];
+                String oid = o[0];
+                String ocli = o[1];
                 String odate = o[2];
-                String otot  = o[3];
+                String otot = o[3];
                 String ostat = o[4];
                 String[][] items = details.get(oid);
                 boolean isOpen = oid.equals(openDetail);
@@ -1125,10 +1149,14 @@
                 <tbody>
                 <% for (String[] item : items) { %>
                 <tr>
-                    <td><%= item[0] %></td>
-                    <td><%= item[1] %></td>
-                    <td><%= item[2] %></td>
-                    <td><%= item[3] %></td>
+                    <td><%= item[0] %>
+                    </td>
+                    <td><%= item[1] %>
+                    </td>
+                    <td><%= item[2] %>
+                    </td>
+                    <td><%= item[3] %>
+                    </td>
                 </tr>
                 <% } %>
                 </tbody>

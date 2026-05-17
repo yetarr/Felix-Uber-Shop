@@ -20,7 +20,7 @@
     HttpSession sess = request.getSession(false);
     if (sess != null) {
         String role = (String) sess.getAttribute("userRole");
-        if(!role.equals("cliente")){
+        if (!role.equals("cliente")) {
             response.sendRedirect("login.jsp");
         }
 
@@ -62,7 +62,7 @@
                     totalEnc = String.valueOf(Integer.parseInt(totalEnc) + 1);
                     Double newTotal = Double.parseDouble(totalGasto) + Double.parseDouble(total);
                     totalGasto = String.format("%.2f", newTotal);
-                    if (estado.equals("pendente")){
+                    if (estado.equals("pendente")) {
                         pendentes++;
                     } else if (estado.equals("confirmada")) {
                         confirmadas++;
@@ -72,7 +72,8 @@
                 }
             }
 
-            rs.close(); ps.close();
+            rs.close();
+            ps.close();
 
             // Obter movimentos da carteira
             sql = "SELECT a.*, c.saldo " +
@@ -97,7 +98,7 @@
                 String data_operacao = rs.getString("data_operacao");
                 saldoDisp = rs.getString("saldo");
 
-                if (tipo_operacao.equals("pagamento")){
+                if (tipo_operacao.equals("pagamento")) {
                     valor = "-" + valor;
                 } else {
                     valor = "+" + valor;
@@ -116,7 +117,9 @@
                 movements.add(movement);
             }
 
-            conn.close(); rs.close(); ps.close();
+            conn.close();
+            rs.close();
+            ps.close();
         } catch (Exception e) {
             sess.setAttribute("errorMsg", "Erro na dashboard: " + e.getMessage());
             response.sendRedirect("login.jsp");

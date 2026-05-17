@@ -1,3 +1,4 @@
+<%----%>
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*" %>
 <%@ page import="java.sql.*" %>
@@ -62,7 +63,9 @@
                         newSess.setAttribute("userRole", rs.getString("perfil"));
                         newSess.setMaxInactiveInterval(30 * 60);
 
-                        rs.close(); ps.close(); conn.close();
+                        rs.close();
+                        ps.close();
+                        conn.close();
 
                         // Redirecionar com base na role do utilizador
                         String role = newSess.getAttribute("userRole").toString();
@@ -75,7 +78,9 @@
                     errorMsg = "Email ou palavra-passe incorretos.";
                 }
 
-                rs.close(); ps.close(); conn.close();
+                rs.close();
+                ps.close();
+                conn.close();
             } catch (Exception e) {
                 errorMsg = "Erro interno: " + e.getMessage();
             }
