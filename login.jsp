@@ -1,7 +1,88 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*" %>
+<%@ page import="java.sql.*" %>
+<%@ page import="java.security.MessageDigest, java.nio.charset.StandardCharsets" %>
+<%@ include file="../basedados/basedados.h" %>
+<%!
+    // Hashing da password
+    private String hashPassword(String plain) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(plain.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            throw new RuntimeException("Erro ao encriptar password", e);
+        }
+    }
+%>
 <%
-    String errorMsg = (String) request.getAttribute("error");
+    String errorMsg = null;
+    String successMsg = null;
+
+    // Ler sessao
+    HttpSession sess = request.getSession(false);
+    if (sess != null) {
+        successMsg = (String) sess.getAttribute("success");
+        errorMsg = (String) sess.getAttribute("errorMsg");
+        sess.removeAttribute("success");
+    }
+
+    // Executar apenas quando der submit no form
+    if ("POST".equalsIgnoreCase(request.getMethod())) {
+        sess.removeAttribute("errorMsg");
+        String email = request.getParameter("email");
+        String password = hashPassword(request.getParameter("password"));
+
+        // Validar campos
+        if (email == null || email.isBlank() || password == null || password.isBlank()) {
+            errorMsg = "Preencha todos os campos.";
+        } else {
+            try {
+                Connection conn = getConnection();
+                String sql = "SELECT u.*, c.saldo " +
+                        "FROM utilizadores u " +
+                        "LEFT JOIN carteira c ON c.id_utilizador = u.id_utilizador " +
+                        "WHERE email = ? AND password_hash = ?; ";
+                PreparedStatement ps = conn.prepareStatement(sql);
+                ps.setString(1, email);
+                ps.setString(2, password);
+                ResultSet rs = ps.executeQuery();
+
+                if (rs.next()) {
+                    if (!rs.getBoolean("ativo")) {
+                        errorMsg = "Conta inativa. Contacte o suporte.";
+                    } else {
+                        // Armazenar sessao
+                        HttpSession newSess = request.getSession(true);
+                        newSess.setAttribute("userId", rs.getInt("id_utilizador"));
+                        newSess.setAttribute("userName", rs.getString("nome"));
+                        newSess.setAttribute("userEmail", rs.getString("email"));
+                        newSess.setAttribute("userRole", rs.getString("perfil"));
+                        newSess.setAttribute("userSaldo", rs.getDouble("saldo"));
+                        newSess.setMaxInactiveInterval(30 * 60);
+
+                        rs.close(); ps.close(); conn.close();
+
+                        // Redirecionar com base na role do utilizador
+                        String role = newSess.getAttribute("userRole").toString();
+                        if ("admin".equals(role)) response.sendRedirect("adminDashboard.jsp");
+                        else if ("funcionario".equals(role)) response.sendRedirect("funcDashboard.jsp");
+                        else response.sendRedirect("dashboard.jsp");
+                        return; // Parar apresentacao da pagina
+                    }
+                } else {
+                    errorMsg = "Email ou palavra-passe incorretos.";
+                }
+
+                rs.close(); ps.close(); conn.close();
+            } catch (Exception e) {
+                errorMsg = "Erro interno: " + e.getMessage();
+            }
+        }
+    }
+
     String emailVal = request.getParameter("email") != null ? request.getParameter("email") : "";
 %>
 <!DOCTYPE html>
@@ -293,7 +374,6 @@
 </head>
 <body>
 
-<!-- NAV -->
 <nav>
     <a href="index.jsp" class="nav-brand">FelixUberShop</a>
     <div class="nav-links">
@@ -302,11 +382,9 @@
     </div>
 </nav>
 
-<!-- MAIN -->
 <main>
     <div class="card">
 
-        <!-- Avatar icon -->
         <div class="avatar-wrap">
             <div class="avatar">
                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -318,7 +396,6 @@
         <h1 class="card-title">Bem-vindo de volta</h1>
         <p class="card-subtitle">Entre na sua conta FelixUberShop</p>
 
-        <!-- Error message -->
         <% if (errorMsg != null && !errorMsg.isEmpty()) { %>
         <div class="error-msg">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="#f08080">
@@ -328,10 +405,8 @@
         </div>
         <% } %>
 
-        <!-- Login form -->
-        <form action="LoginServlet" method="post" autocomplete="off">
+        <form action="login.jsp" method="post">
 
-            <!-- Email -->
             <div class="form-group">
                 <label for="email">Email</label>
                 <div class="input-wrap">
@@ -350,7 +425,6 @@
                 </div>
             </div>
 
-            <!-- Password -->
             <div class="form-group">
                 <label for="password">Palavra-passe</label>
                 <div class="input-wrap">
@@ -398,7 +472,6 @@
         const icon = document.getElementById('eye-icon');
         if (pwInput.type === 'password') {
             pwInput.type = 'text';
-
             icon.innerHTML = '<path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75C21.27 7.61 17 4.5 12 4.5c-1.29 0-2.53.25-3.67.7l2.16 2.16C11 7.13 11.48 7 12 7zm-9.71-1.14L4.47 8.04C2.75 9.33 1.4 11.1.72 13.15 2.46 17.54 6.72 20.5 12 20.5c1.51 0 2.97-.3 4.29-.83l.42.42L19.73 23 21 21.73 3.27 4 2.29 5.86zM7 12c0-2.76 2.24-5 5-5 .77 0 1.5.18 2.14.49L12 9.63C11.8 9.55 11.41 9.5 11 9.5 9.34 9.5 8 10.84 8 12.5c0 .41.05.8.13 1.18L6.15 11.7C6.05 11.49 7 11.27 7 12z"/>';
         } else {
             pwInput.type = 'password';
