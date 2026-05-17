@@ -1,17 +1,53 @@
 ﻿<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
+<%@ page import="java.sql.*" %>
+<%@ include file="basedados/basedados.h" %>
 <%
-    String adminName = "Administrador";
-    String activePage = "utilizadores";
+    HttpSession sess = request.getSession(false);
+    if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
+    if (!"administrador".equals(sess.getAttribute("userRole"))) { response.sendRedirect("dashboard.jsp"); return; }
 
-    String successMsg = (String) request.getAttribute("success");
-    String errorMsg   = (String) request.getAttribute("error");
+    String adminName = (String) sess.getAttribute("userName");
+    if (adminName == null) adminName = "Administrador";
+    String activePage = "produtos";
+
+    String successMsg = (String) sess.getAttribute("success");
+    if (successMsg != null) sess.removeAttribute("success");
+    String errorMsg = null;
+
+    if ("POST".equalsIgnoreCase(request.getMethod())) {
+        String nome = request.getParameter("nome");
+        String descricao = request.getParameter("descricao");
+        String precoStr = request.getParameter("preco");
+        String stockStr = request.getParameter("stock");
+        String categoria = request.getParameter("categoria");
+        if (nome == null || nome.isBlank() || precoStr == null || precoStr.isBlank()) {
+            errorMsg = "Nome e preço são obrigatórios.";
+        } else {
+            try {
+                double preco = Double.parseDouble(precoStr.replace(",", "."));
+                int stock = stockStr != null && !stockStr.isBlank() ? Integer.parseInt(stockStr) : 0;
+                Connection conn = getConnection();
+                PreparedStatement ps = conn.prepareStatement(
+                    "INSERT INTO produtos (nome, descricao, preco, stock, categoria) VALUES (?,?,?,?,?)");
+                ps.setString(1, nome.trim());
+                ps.setString(2, descricao != null ? descricao.trim() : null);
+                ps.setDouble(3, preco);
+                ps.setInt(4, stock);
+                ps.setString(5, categoria != null ? categoria.trim() : null);
+                ps.executeUpdate(); closeAll(null, ps, conn);
+                sess.setAttribute("success", "Produto criado com sucesso.");
+                response.sendRedirect("produtosAdmin.jsp"); return;
+            } catch (NumberFormatException e) { errorMsg = "Preço ou stock inválido."; }
+            catch (Exception e) { errorMsg = "Erro ao criar produto: " + e.getMessage(); }
+        }
+    }
 %>
 <!DOCTYPE html>
 <html lang="pt">
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>novoUtilizadorAdmin</title>
+    <title>NovoProdutoAdmin</title>
     <style>
         *, *::before, *::after {
             box-sizing: border-box;
@@ -175,10 +211,17 @@
             min-width: 0;
         }
 
+        .page-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #e8e8e8;
+            margin-bottom: 22px;
+        }
+
         /* ── TWO-COL LAYOUT ──────────────────────────────── */
         .page-grid {
             display: grid;
-            grid-template-columns: 1fr 220px;
+            grid-template-columns: 1fr 300px;
             gap: 20px;
             align-items: start;
         }
@@ -188,16 +231,14 @@
             background: #2b2b2b;
             border: 1px solid #333;
             border-radius: 10px;
-            padding: 22px 22px 18px;
-            display: flex;
-            flex-direction: column;
-            gap: 18px;
+            overflow: hidden;
         }
 
-        .form-panel-title {
-            font-size: 1rem;
-            font-weight: 700;
-            color: #e8e8e8;
+        .form-body {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
         }
 
         /* Alert */
@@ -228,63 +269,65 @@
             color: #f08080;
         }
 
-        /* Perfil toggle */
-        .perfil-group {
+        /* Photo upload area */
+        .photo-upload {
+            height: 130px;
+            background: #1e1e1e;
+            border: 2px dashed #3a3a3a;
+            border-radius: 10px;
             display: flex;
             flex-direction: column;
-            gap: 7px;
-        }
-
-        .field-label {
-            font-size: .78rem;
-            color: #888;
-        }
-
-        .perfil-toggle {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 8px;
-        }
-
-        .perfil-btn {
-            display: flex;
             align-items: center;
             justify-content: center;
-            gap: 7px;
-            padding: 10px 8px;
-            border-radius: 8px;
-            border: 1px solid #3a3a3a;
-            background: #1e1e1e;
-            color: #888;
-            font-size: .85rem;
-            font-weight: 600;
+            gap: 8px;
             cursor: pointer;
-            transition: border-color .2s, background .2s, color .2s;
+            transition: border-color .2s, background .2s;
+            position: relative;
+            overflow: hidden;
         }
 
-        .perfil-btn svg {
-            width: 15px;
-            height: 15px;
-            fill: currentColor;
-            flex-shrink: 0;
-        }
-
-        .perfil-btn:hover:not(.active) {
+        .photo-upload:hover {
             border-color: #555;
-            color: #bbb;
+            background: #222;
         }
 
-        .perfil-btn.active {
-            background: #00CE86;
-            border-color: #00CE86;
-            color: #111;
+        .photo-upload svg {
+            fill: #444;
+            width: 32px;
+            height: 32px;
+        }
+
+        .photo-upload span {
+            font-size: .78rem;
+            color: #555;
+        }
+
+        .photo-upload input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        #photoPreviewImg {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+            position: absolute;
+            inset: 0;
         }
 
         /* Form fields */
         .field-group {
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 5px;
+        }
+
+        .field-label {
+            font-size: .78rem;
+            color: #888;
         }
 
         .field-input {
@@ -309,6 +352,11 @@
             color: #444;
         }
 
+        textarea.field-input {
+            resize: vertical;
+            min-height: 72px;
+        }
+
         .fields-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -318,15 +366,16 @@
         /* Buttons */
         .btn-criar {
             width: 100%;
-            padding: 12px;
+            padding: 11px;
             background: #00CE86;
             color: #111;
             border: none;
-            border-radius: 8px;
+            border-radius: 7px;
             font-size: .95rem;
             font-weight: 700;
             cursor: pointer;
             transition: background .2s;
+            margin-top: 4px;
         }
 
         .btn-criar:hover {
@@ -339,64 +388,94 @@
             color: #666;
             font-size: .84rem;
             text-decoration: none;
-            padding: 10px;
-            border: 1px solid #333;
-            border-radius: 8px;
-            transition: color .2s, border-color .2s;
+            margin-top: 2px;
+            transition: color .2s;
         }
 
         .link-voltar:hover {
             color: #aaa;
-            border-color: #555;
         }
 
-        /* ── RIGHT: NOTES PANEL ──────────────────────────── */
-        .notes-panel {
+        /* ── RIGHT: PREVIEW PANEL ────────────────────────── */
+        .preview-panel {
             background: #262626;
             border: 1px solid #333;
             border-radius: 10px;
             overflow: hidden;
         }
 
-        .notes-header {
+        .preview-header {
             padding: 13px 16px;
             border-bottom: 1px solid #333;
-            font-size: .72rem;
+            font-size: .75rem;
             font-weight: 700;
-            letter-spacing: 1.2px;
+            letter-spacing: 1px;
             color: #555;
             text-transform: uppercase;
         }
 
-        .notes-body {
-            padding: 4px 0 8px;
+        .preview-body {
+            padding: 20px 16px;
         }
 
-        .notes-row {
+        .preview-card {
+            background: #2b2b2b;
+            border: 1px solid #333;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .preview-card-img {
+            width: 100%;
+            height: 130px;
+            background: #1e1e1e;
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            padding: 9px 16px;
-            border-bottom: 1px solid #222;
-            font-size: .83rem;
+            justify-content: center;
+            overflow: hidden;
         }
 
-        .notes-row:last-child {
-            border-bottom: none;
+        .preview-card-img svg {
+            fill: #2e2e2e;
+            width: 40px;
+            height: 40px;
         }
 
-        .notes-label {
-            color: #666;
+        .preview-card-img img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
         }
 
-        .notes-value {
-            color: #bbb;
-            font-weight: 600;
-            text-align: right;
+        .preview-card-body {
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
         }
 
-        .notes-value.green {
+        .preview-card-nome {
+            font-size: .95rem;
+            font-weight: 700;
+            color: #e0e0e0;
+        }
+
+        .preview-card-desc {
+            font-size: .8rem;
+            color: #888;
+        }
+
+        .preview-card-preco {
+            font-size: 1.05rem;
+            font-weight: 700;
             color: #00CE86;
+            margin-top: 4px;
+        }
+
+        .preview-card-stock {
+            font-size: .76rem;
+            color: #666;
         }
 
         /* ── RESPONSIVE ──────────────────────────────────── */
@@ -405,7 +484,7 @@
                 grid-template-columns: 1fr;
             }
 
-            .notes-panel {
+            .preview-panel {
                 display: none;
             }
         }
@@ -427,14 +506,6 @@
 
             .main-content {
                 padding: 14px;
-            }
-
-            .fields-row {
-                grid-template-columns: 1fr;
-            }
-
-            .perfil-toggle {
-                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -487,6 +558,7 @@
                 </a>
             </li>
             <li>
+                <%-- TODO: criar utilizadoresAdmin.jsp --%>
                 <a href="utilizadoresAdmin.jsp" class="<%= "utilizadores".equals(activePage) ? "active" : "" %>">
                     <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
                     <span>Utilizadores</span>
@@ -519,121 +591,101 @@
     <!-- MAIN -->
     <main class="main-content">
 
+        <div class="page-title">Novo produto</div>
+
         <div class="page-grid">
 
             <!-- LEFT: FORM -->
             <div class="form-panel">
+                <div class="form-body">
 
-                <div class="form-panel-title">Novo utilizador</div>
+                    <% if (successMsg != null && !successMsg.isEmpty()) { %>
+                    <div class="alert alert-success">
+                        <svg viewBox="0 0 24 24" fill="#00CE86"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14l-4-4 1.41-1.41L10 13.17l6.59-6.59L18 8l-8 8z"/></svg>
+                        <%= successMsg %>
+                    </div>
+                    <% } %>
+                    <% if (errorMsg != null && !errorMsg.isEmpty()) { %>
+                    <div class="alert alert-error">
+                        <svg viewBox="0 0 24 24" fill="#f08080"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+                        <%= errorMsg %>
+                    </div>
+                    <% } %>
 
-                <% if (successMsg != null && !successMsg.isEmpty()) { %>
-                <div class="alert alert-success">
-                    <svg viewBox="0 0 24 24" fill="#00CE86"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14l-4-4 1.41-1.41L10 13.17l6.59-6.59L18 8l-8 8z"/></svg>
-                    <%= successMsg %>
-                </div>
-                <% } %>
-                <% if (errorMsg != null && !errorMsg.isEmpty()) { %>
-                <div class="alert alert-error">
-                    <svg viewBox="0 0 24 24" fill="#f08080"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-                    <%= errorMsg %>
-                </div>
-                <% } %>
-
-                <%-- TODO: ligar ao AdminUtilizadoresServlet com action=criar --%>
-                <form action="AdminUtilizadoresServlet" method="post"
-                      onsubmit="return validarForm()">
-                    <input type="hidden" name="action" value="criar"/>
-                    <input type="hidden" id="hiddenPerfil" name="perfil" value="Cliente"/>
-
-                    <!-- Perfil toggle -->
-                    <div class="perfil-group">
-                        <span class="field-label">Perfil</span>
-                        <div class="perfil-toggle">
-                            <button type="button" class="perfil-btn active" id="btnCliente"
-                                    onclick="selecionarPerfil('Cliente')">
-                                <svg viewBox="0 0 24 24"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
-                                Cliente
-                            </button>
-                            <button type="button" class="perfil-btn" id="btnFuncionario"
-                                    onclick="selecionarPerfil('Funcionário')">
-                                <svg viewBox="0 0 24 24"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg>
-                                Funcionário
-                            </button>
-                            <button type="button" class="perfil-btn" id="btnAdmin"
-                                    onclick="selecionarPerfil('Admin')">
-                                <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.01 7.01 0 0 0-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.47.47 0 0 0-.59.22L2.74 8.87a.47.47 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 0 0-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-                                Admin
-                            </button>
-                        </div>
+                    <%-- TODO: implementar upload de imagem (guardar em disco ou BD) --%>
+                    <div class="photo-upload" id="photoUpload">
+                        <img id="photoPreviewImg" src="" alt="preview"/>
+                        <svg viewBox="0 0 24 24" id="photoIcon"><path d="M12 15.2A3.2 3.2 0 1 1 12 8.8a3.2 3.2 0 0 1 0 6.4zm0-8.2a5 5 0 1 0 0 10A5 5 0 0 0 12 7zM4 5h2.17L7.4 3.6A1 1 0 0 1 8.26 3h7.48a1 1 0 0 1 .86.6L17.83 5H20a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></svg>
+                        <span id="photoLabel">Clica para adicionar foto</span>
+                        <input type="file" id="fotoFile" accept="image/*" onchange="previewPhoto(this)"/>
                     </div>
 
-                    <!-- Fields -->
-                    <div class="field-group" style="margin-top:4px;">
-                        <label class="field-label" for="fieldNome">Nome completo</label>
-                        <input type="text" id="fieldNome" name="nome"
-                               class="field-input"
-                               placeholder="Nome do utilizador"
-                               required/>
-                    </div>
+                    <form action="novoProdutoAdmin.jsp" method="post"
+                          onsubmit="return validarForm()">
+                        <input type="hidden" name="action" value="criar"/>
 
-                    <div class="field-group">
-                        <label class="field-label" for="fieldEmail">Email</label>
-                        <input type="email" id="fieldEmail" name="email"
-                               class="field-input"
-                               placeholder="email@exemplo.com"
-                               required/>
-                    </div>
-
-                    <div class="field-group">
-                        <label class="field-label" for="fieldTel">Telefone</label>
-                        <input type="text" id="fieldTel" name="telefone"
-                               class="field-input"
-                               placeholder="9XX XXX XXX"/>
-                    </div>
-
-                    <div class="fields-row">
                         <div class="field-group">
-                            <label class="field-label" for="fieldPass">Password</label>
-                            <input type="password" id="fieldPass" name="password"
+                            <label class="field-label" for="fieldNome">Nome</label>
+                            <input type="text" id="fieldNome" name="nome"
                                    class="field-input"
-                                   placeholder="••••••"
+                                   placeholder="ex: Arroz 1kg"
+                                   oninput="atualizarPreview()"
                                    required/>
                         </div>
+
                         <div class="field-group">
-                            <label class="field-label" for="fieldPassConf">Confirmar password</label>
-                            <input type="password" id="fieldPassConf" name="passwordConfirm"
-                                   class="field-input"
-                                   placeholder="••••••"
-                                   required/>
+                            <label class="field-label" for="fieldDesc">Descrição</label>
+                            <textarea id="fieldDesc" name="descricao"
+                                      class="field-input"
+                                      placeholder="Breve descrição do produto..."
+                                      rows="3"
+                                      oninput="atualizarPreview()"></textarea>
                         </div>
-                    </div>
 
-                    <button type="submit" class="btn-criar">Criar utilizador</button>
-                </form>
+                        <div class="fields-row">
+                            <div class="field-group">
+                                <label class="field-label" for="fieldPreco">Preço (&euro;)</label>
+                                <input type="number" id="fieldPreco" name="preco"
+                                       class="field-input"
+                                       placeholder="0,00"
+                                       step="0.01" min="0"
+                                       oninput="atualizarPreview()"
+                                       required/>
+                            </div>
+                            <div class="field-group">
+                                <label class="field-label" for="fieldStock">Stock inicial</label>
+                                <input type="number" id="fieldStock" name="stock"
+                                       class="field-input"
+                                       placeholder="0"
+                                       min="0"
+                                       oninput="atualizarPreview()"
+                                       required/>
+                            </div>
+                        </div>
 
-                <a href="utilizadoresAdmin.jsp" class="link-voltar">&larr; Voltar à lista</a>
+                        <button type="submit" class="btn-criar">Criar produto</button>
+                    </form>
 
+                    <a href="produtosAdmin.jsp" class="link-voltar">&larr; Voltar à lista</a>
+
+                </div>
             </div>
 
-            <!-- RIGHT: NOTES -->
-            <div class="notes-panel">
-                <div class="notes-header">Notas</div>
-                <div class="notes-body">
-                    <div class="notes-row">
-                        <span class="notes-label">Carteira</span>
-                        <span class="notes-value">Criada automaticamente</span>
-                    </div>
-                    <div class="notes-row">
-                        <span class="notes-label">Saldo inicial</span>
-                        <span class="notes-value">0,00 &euro;</span>
-                    </div>
-                    <div class="notes-row">
-                        <span class="notes-label">Estado</span>
-                        <span class="notes-value green">Ativo</span>
-                    </div>
-                    <div class="notes-row">
-                        <span class="notes-label">Password</span>
-                        <span class="notes-value">Guardada com hash</span>
+            <!-- RIGHT: PREVIEW -->
+            <div class="preview-panel">
+                <div class="preview-header">Pré-visualização</div>
+                <div class="preview-body">
+                    <div class="preview-card">
+                        <div class="preview-card-img" id="previewImgBox">
+                            <svg viewBox="0 0 24 24" id="previewImgIcon"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                            <img id="previewImg" src="" alt=""/>
+                        </div>
+                        <div class="preview-card-body">
+                            <div class="preview-card-nome" id="previewNome">Nome do produto</div>
+                            <div class="preview-card-desc" id="previewDesc">Descrição do produto aparece aqui</div>
+                            <div class="preview-card-preco" id="previewPreco">0,00 &euro;</div>
+                            <div class="preview-card-stock" id="previewStock">Stock: 0 unidades</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -643,26 +695,49 @@
 </div>
 
 <script>
-    function selecionarPerfil(perfil) {
-        document.getElementById('hiddenPerfil').value = perfil;
+    function atualizarPreview() {
+        const nome  = document.getElementById('fieldNome').value.trim();
+        const desc  = document.getElementById('fieldDesc').value.trim();
+        const preco = parseFloat(document.getElementById('fieldPreco').value) || 0;
+        const stock = parseInt(document.getElementById('fieldStock').value)   || 0;
 
-        document.getElementById('btnCliente').classList.remove('active');
-        document.getElementById('btnFuncionario').classList.remove('active');
-        document.getElementById('btnAdmin').classList.remove('active');
+        document.getElementById('previewNome').textContent  = nome  || 'Nome do produto';
+        document.getElementById('previewDesc').textContent  = desc  || 'Descrição do produto aparece aqui';
+        document.getElementById('previewPreco').textContent = fmtPreco(preco) + ' €';
+        document.getElementById('previewStock').textContent = 'Stock: ' + stock + ' unidades';
+    }
 
-        const map = { 'Cliente': 'btnCliente', 'Funcionário': 'btnFuncionario', 'Admin': 'btnAdmin' };
-        document.getElementById(map[perfil]).classList.add('active');
+    function fmtPreco(val) {
+        return val.toFixed(2).replace('.', ',');
+    }
+
+    function previewPhoto(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const url = URL.createObjectURL(file);
+
+        const previewImg    = document.getElementById('previewImg');
+        const previewIcon   = document.getElementById('previewImgIcon');
+        const uploadImg     = document.getElementById('photoPreviewImg');
+        const uploadIcon    = document.getElementById('photoIcon');
+        const uploadLabel   = document.getElementById('photoLabel');
+
+        uploadImg.src   = url;
+        uploadImg.style.display = 'block';
+        uploadIcon.style.display = 'none';
+        uploadLabel.style.display = 'none';
+
+        previewImg.src  = url;
+        previewImg.style.display  = 'block';
+        previewIcon.style.display = 'none';
     }
 
     function validarForm() {
-        const pass  = document.getElementById('fieldPass').value;
-        const conf  = document.getElementById('fieldPassConf').value;
-        if (pass !== conf) {
-            alert('As passwords não coincidem.');
-            return false;
-        }
-        if (pass.length < 4) {
-            alert('A password deve ter pelo menos 4 caracteres.');
+        const nome  = document.getElementById('fieldNome').value.trim();
+        const preco = document.getElementById('fieldPreco').value;
+        const stock = document.getElementById('fieldStock').value;
+        if (!nome || preco === '' || stock === '') {
+            alert('Preenche todos os campos obrigatórios.');
             return false;
         }
         return true;

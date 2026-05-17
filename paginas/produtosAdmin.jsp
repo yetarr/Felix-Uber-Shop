@@ -1,53 +1,144 @@
 ﻿<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*" %>
+<%@ page import="java.security.MessageDigest, java.nio.charset.StandardCharsets" %>
+<%@ include file="basedados/basedados.h" %>
+<%!
+    private String hashPassword(String plain) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] h = md.digest(plain.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : h) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) { throw new RuntimeException(e); }
+    }
+%>
 <%
-    String adminName = "Administrador";
-    String activePage = "utilizadores";
+    HttpSession sess = request.getSession(false);
+    if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
+    if (!"administrador".equals(sess.getAttribute("userRole"))) { response.sendRedirect("dashboard.jsp"); return; }
+    String adminName = (String) sess.getAttribute("userName");
 
-    // {id, nome, email, telefone, perfil, ativo, saldo_cents, num_encomendas, membro_desde}
-    Object[][] users = {
-        {"1", "Ana Silva",          "ana@email.com",                 "912 000 000", "Cliente",     true,  5000, 3, "01/05/2026"},
-        {"2", "João Costa",         "joao@email.com",                "913 111 222", "Cliente",     true,   800, 1, "10/03/2026"},
-        {"3", "Funcionário Teste",  "funcionario@felixubershop.pt",  "914 222 333", "Funcionário", true,     0, 0, "01/01/2026"},
-        {"4", "Pedro Sousa",        "pedro@email.com",               "915 333 444", "Cliente",     false,  200, 0, "20/04/2026"},
-        {"5", "Administrador",      "admin@felixubershop.pt",        "910 000 000", "Admin",       true,     0, 0, "01/01/2026"},
-    };
+    String successMsg = (String) sess.getAttribute("success"); if (successMsg != null) sess.removeAttribute("success");
+    String errorMsg = null;
 
-    String successMsg = (String) request.getAttribute("success");
-    String errorMsg   = (String) request.getAttribute("error");
+    if ("POST".equalsIgnoreCase(request.getMethod())) {
+        String postAction = request.getParameter("action");
 
-    String selectedId = request.getParameter("userId") != null
-            ? request.getParameter("userId") : "1";
+        if ("guardar".equals(postAction)) {
+            String produtoId = request.getParameter("produtoId");
+            String nome = request.getParameter("nome");
+            String descricao = request.getParameter("descricao");
+            String precoStr = request.getParameter("preco");
+            String stockStr = request.getParameter("stock");
+            String atoStr = request.getParameter("ativo");
+            boolean ativo = "true".equalsIgnoreCase(atoStr);
 
-    String selNome    = "";
-    String selEmail   = "";
-    String selTel     = "";
-    String selPerfil  = "";
-    boolean selAtivo  = true;
-    int    selSaldo   = 0;
-    int    selEnc     = 0;
-    String selMembro  = "";
-
-    for (Object[] u : users) {
-        if (u[0].equals(selectedId)) {
-            selNome   = (String)  u[1];
-            selEmail  = (String)  u[2];
-            selTel    = (String)  u[3];
-            selPerfil = (String)  u[4];
-            selAtivo  = (Boolean) u[5];
-            selSaldo  = (Integer) u[6];
-            selEnc    = (Integer) u[7];
-            selMembro = (String)  u[8];
-            break;
+            if (nome == null || nome.isBlank() || precoStr == null || precoStr.isBlank()) {
+                errorMsg = "Nome e preço são obrigatórios.";
+            } else {
+                try {
+                    double preco = Double.parseDouble(precoStr.replace(",", "."));
+                    int stock = stockStr != null && !stockStr.isBlank() ? Integer.parseInt(stockStr) : 0;
+                    Connection conn = getConnection();
+                    if (produtoId == null || produtoId.isBlank()) {
+                        PreparedStatement ps = conn.prepareStatement(
+                            "INSERT INTO produtos (nome, descricao, preco, stock, ativo) VALUES (?,?,?,?,?)",
+                            PreparedStatement.RETURN_GENERATED_KEYS);
+                        ps.setString(1, nome.trim()); ps.setString(2, descricao);
+                        ps.setDouble(3, preco); ps.setInt(4, stock); ps.setInt(5, ativo ? 1 : 0);
+                        ps.executeUpdate();
+                        ResultSet keys = ps.getGeneratedKeys();
+                        String newId = keys.next() ? String.valueOf(keys.getInt(1)) : "";
+                        closeAll(null, ps, conn);
+                        sess.setAttribute("success", "Produto criado com sucesso.");
+                        response.sendRedirect("produtosAdmin.jsp?produtoId=" + newId); return;
+                    } else {
+                        PreparedStatement ps = conn.prepareStatement(
+                            "UPDATE produtos SET nome=?, descricao=?, preco=?, stock=?, ativo=? WHERE id_produto=?");
+                        ps.setString(1, nome.trim()); ps.setString(2, descricao);
+                        ps.setDouble(3, preco); ps.setInt(4, stock); ps.setInt(5, ativo ? 1 : 0);
+                        ps.setInt(6, Integer.parseInt(produtoId));
+                        ps.executeUpdate(); closeAll(null, ps, conn);
+                        sess.setAttribute("success", "Produto atualizado com sucesso.");
+                        response.sendRedirect("produtosAdmin.jsp?produtoId=" + produtoId); return;
+                    }
+                } catch (NumberFormatException e) { errorMsg = "Preço ou stock inválido."; }
+                catch (Exception e) { errorMsg = "Erro: " + e.getMessage(); }
+            }
+        } else if ("toggleAtivo".equals(postAction)) {
+            String produtoId = request.getParameter("produtoId");
+            try {
+                Connection conn = getConnection();
+                PreparedStatement ps = conn.prepareStatement(
+                    "UPDATE produtos SET ativo = 1 - ativo WHERE id_produto = ?");
+                ps.setInt(1, Integer.parseInt(produtoId)); ps.executeUpdate(); closeAll(null, ps, conn);
+                sess.setAttribute("success", "Estado do produto alterado.");
+                response.sendRedirect("produtosAdmin.jsp?produtoId=" + produtoId); return;
+            } catch (Exception e) { errorMsg = "Erro: " + e.getMessage(); }
         }
     }
+
+    List<Object[]> products = new ArrayList<>();
+    Connection _conn1 = null;
+    PreparedStatement _ps1 = null;
+    ResultSet _rs1 = null;
+    try {
+        _conn1 = getConnection();
+        _ps1 = _conn1.prepareStatement(
+            "SELECT id_produto, nome, COALESCE(descricao,''), CAST(preco*100 AS SIGNED) as preco_cents, stock, ativo " +
+            "FROM produtos ORDER BY nome");
+        _rs1 = _ps1.executeQuery();
+        while (_rs1.next()) {
+            products.add(new Object[]{
+                String.valueOf(_rs1.getInt("id_produto")),
+                _rs1.getString("nome"),
+                _rs1.getString(3),
+                (int) _rs1.getLong("preco_cents"),
+                _rs1.getInt("stock"),
+                _rs1.getInt("ativo") != 0
+            });
+        }
+    } catch (Exception _e1) {
+        // page renders with empty list
+    } finally {
+        closeAll(_rs1, _ps1, _conn1);
+    }
+
+    String selectedId = request.getParameter("produtoId") != null
+            ? request.getParameter("produtoId")
+            : (!products.isEmpty() ? (String) products.get(0)[0] : "");
+    boolean isNovo = "true".equals(request.getParameter("novo"));
+
+    String selNome  = "";
+    String selDesc  = "";
+    int    selPreco = 0;
+    int    selStock = 0;
+    boolean selAtivo = true;
+
+    if (!isNovo) {
+        for (Object[] p : products) {
+            if (p[0].equals(selectedId)) {
+                selNome  = (String)  p[1];
+                selDesc  = (String)  p[2];
+                selPreco = (Integer) p[3];
+                selStock = (Integer) p[4];
+                selAtivo = (Boolean) p[5];
+                break;
+            }
+        }
+    }
+
+    String filterEstado = request.getParameter("estado") != null ? request.getParameter("estado") : "";
+    String filterSort   = request.getParameter("sort")   != null ? request.getParameter("sort")   : "nome";
+    String activePage   = "produtos";
 %>
 <!DOCTYPE html>
 <html lang="pt">
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>utilizadoresAdmin</title>
+    <title>produtosAdmin</title>
     <style>
         *, *::before, *::after {
             box-sizing: border-box;
@@ -336,13 +427,13 @@
             background: #1e1e1e;
         }
 
-        /* Users table */
-        .users-table {
+        /* Products table */
+        .products-table {
             width: 100%;
             border-collapse: collapse;
         }
 
-        .users-table th {
+        .products-table th {
             padding: 9px 14px;
             font-size: .71rem;
             font-weight: 700;
@@ -352,9 +443,20 @@
             text-align: left;
             border-bottom: 1px solid #333;
             background: #252525;
+            cursor: pointer;
+            user-select: none;
         }
 
-        .users-table td {
+        .products-table th:hover {
+            color: #888;
+        }
+
+        .products-table th .sort-ico {
+            margin-left: 3px;
+            color: #00CE86;
+        }
+
+        .products-table td {
             padding: 11px 14px;
             font-size: .86rem;
             color: #bbb;
@@ -362,54 +464,35 @@
             vertical-align: middle;
         }
 
-        .users-table tr:last-child td {
+        .products-table tr:last-child td {
             border-bottom: none;
         }
 
-        .users-table tr.selected td {
+        .products-table tr.selected td {
             background: rgba(0, 206, 134, .05);
         }
 
-        .users-table tr:not(.selected):hover td {
+        .products-table tr:not(.selected):hover td {
             background: rgba(255, 255, 255, .02);
             cursor: pointer;
         }
 
-        .user-nome {
+        .product-nome {
             font-weight: 600;
             color: #ddd;
         }
 
-        .user-email {
+        .product-desc {
             color: #888;
-            font-size: .83rem;
+            font-size: .82rem;
         }
 
-        /* Badges */
         .badge {
             display: inline-block;
             padding: 3px 10px;
             border-radius: 20px;
             font-size: .71rem;
             font-weight: 700;
-        }
-
-        .badge-cliente {
-            background: rgba(139, 92, 246, .15);
-            color: #a78bfa;
-            border: 1px solid rgba(139, 92, 246, .3);
-        }
-
-        .badge-funcionario {
-            background: rgba(245, 158, 11, .13);
-            color: #fbbf24;
-            border: 1px solid rgba(245, 158, 11, .3);
-        }
-
-        .badge-admin {
-            background: rgba(59, 130, 246, .13);
-            color: #60a5fa;
-            border: 1px solid rgba(59, 130, 246, .3);
         }
 
         .badge-ativo {
@@ -424,7 +507,6 @@
             border: 1px solid rgba(220, 60, 60, .25);
         }
 
-        /* Action buttons */
         .action-btns {
             display: flex;
             gap: 6px;
@@ -439,6 +521,7 @@
             font-size: .76rem;
             font-weight: 600;
             cursor: pointer;
+            text-decoration: none;
             transition: border-color .2s, color .2s;
         }
 
@@ -456,6 +539,7 @@
             font-size: .76rem;
             font-weight: 600;
             cursor: pointer;
+            text-decoration: none;
             transition: background .2s, border-color .2s;
         }
 
@@ -473,6 +557,7 @@
             font-size: .76rem;
             font-weight: 700;
             cursor: pointer;
+            text-decoration: none;
             transition: background .2s;
         }
 
@@ -510,7 +595,7 @@
 
         /* Alert inside panel */
         .panel-alert {
-            margin: 12px 16px 0;
+            margin: 12px 16px;
             border-radius: 7px;
             padding: 9px 13px;
             font-size: .82rem;
@@ -537,9 +622,40 @@
             color: #f08080;
         }
 
+        /* Photo area — TODO: implementar upload de imagem */
+        .photo-area {
+            margin: 14px 16px;
+            height: 110px;
+            background: #1e1e1e;
+            border: 2px dashed #333;
+            border-radius: 9px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: border-color .2s;
+        }
+
+        .photo-area:hover {
+            border-color: #555;
+        }
+
+        .photo-area svg {
+            fill: #444;
+            width: 28px;
+            height: 28px;
+        }
+
+        .photo-area span {
+            font-size: .76rem;
+            color: #555;
+        }
+
         /* Form fields */
         .field-group {
-            padding: 0 16px 12px;
+            padding: 0 16px 14px;
         }
 
         .field-label {
@@ -559,7 +675,6 @@
             padding: 8px 11px;
             outline: none;
             transition: border-color .2s, box-shadow .2s;
-            font-family: inherit;
         }
 
         .field-input:focus {
@@ -567,41 +682,25 @@
             box-shadow: 0 0 0 3px rgba(0, 206, 134, .1);
         }
 
-        .field-select {
-            width: 100%;
-            background: #1a1a1a;
-            border: 1px solid #3a3a3a;
-            border-radius: 7px;
-            color: #fff;
-            font-size: .88rem;
-            padding: 8px 11px;
-            outline: none;
-            cursor: pointer;
-            transition: border-color .2s;
-            appearance: auto;
+        .fields-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            padding: 0 16px 14px;
         }
 
-        .field-select:focus {
-            border-color: #00CE86;
+        .fields-row .field-label {
+            margin-bottom: 5px;
         }
 
-        .field-select option {
-            background: #1a1a1a;
-        }
-
-        .form-top-gap {
-            height: 14px;
-        }
-
-        /* Action buttons in panel */
+        /* Action buttons */
         .edit-actions {
-            padding: 4px 16px 16px;
+            padding: 0 16px 16px;
             display: flex;
             flex-direction: column;
             gap: 8px;
             border-top: 1px solid #2a2a2a;
             padding-top: 14px;
-            margin-top: 4px;
         }
 
         .btn-guardar {
@@ -621,10 +720,10 @@
             background: #00b876;
         }
 
-        .btn-inativar-user {
+        .btn-toggle-estado {
             width: 100%;
             padding: 10px;
-            background: rgba(180, 30, 30, .15);
+            background: none;
             border: 1px solid #7a3030;
             color: #e07070;
             border-radius: 7px;
@@ -634,51 +733,19 @@
             transition: background .2s, border-color .2s;
         }
 
-        .btn-inativar-user:hover {
-            background: rgba(220, 60, 60, .18);
+        .btn-toggle-estado:hover {
+            background: rgba(220, 60, 60, .1);
             border-color: #e05555;
         }
 
-        /* Resumo section */
-        .resumo-section {
-            margin: 0 16px 16px;
-            border-top: 1px solid #2a2a2a;
-            padding-top: 14px;
-        }
-
-        .resumo-title {
-            font-size: .78rem;
-            font-weight: 700;
-            color: #666;
-            letter-spacing: .6px;
-            text-transform: uppercase;
-            margin-bottom: 10px;
-        }
-
-        .resumo-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 5px 0;
-            font-size: .84rem;
-            border-bottom: 1px solid #2a2a2a;
-        }
-
-        .resumo-row:last-child {
-            border-bottom: none;
-        }
-
-        .resumo-label {
-            color: #777;
-        }
-
-        .resumo-value {
-            color: #ccc;
-            font-weight: 600;
-        }
-
-        .resumo-value.green {
+        .btn-toggle-estado.ativar {
+            border-color: rgba(0, 206, 134, .4);
             color: #00CE86;
+        }
+
+        .btn-toggle-estado.ativar:hover {
+            background: rgba(0, 206, 134, .08);
+            border-color: #00CE86;
         }
 
         .no-selection {
@@ -726,8 +793,8 @@
                 padding: 14px;
             }
 
-            .users-table th:nth-child(2),
-            .users-table td:nth-child(2) {
+            .products-table th:nth-child(2),
+            .products-table td:nth-child(2) {
                 display: none;
             }
         }
@@ -781,6 +848,7 @@
                 </a>
             </li>
             <li>
+                <%-- TODO: criar utilizadoresAdmin.jsp --%>
                 <a href="utilizadoresAdmin.jsp" class="<%= "utilizadores".equals(activePage) ? "active" : "" %>">
                     <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
                     <span>Utilizadores</span>
@@ -815,17 +883,16 @@
 
         <div class="page-grid">
 
-            <!-- LEFT: USERS TABLE -->
+            <!-- LEFT: PRODUCTS TABLE -->
             <div class="panel">
                 <div class="panel-header">
                     <div class="panel-title">
-                        <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-                        Gestão de utilizadores
+                        <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-5 12H9v-2h6v2zm2-4H7V8h10v2z"/></svg>
+                        Gestão de produtos
                     </div>
-                    <%-- TODO: criar novoUtilizadorAdmin.jsp ou modal inline --%>
-                    <a href="novoUtilizadorAdmin.jsp" class="btn-novo">
+                    <a href="novoProdutoAdmin.jsp" class="btn-novo">
                         <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:currentColor;"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-                        Novo utilizador
+                        Novo produto
                     </a>
                 </div>
 
@@ -834,83 +901,69 @@
                     <div class="search-wrap">
                         <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
                         <input type="text" id="searchInput" class="search-input"
-                               placeholder="Pesquisar..."
+                               placeholder="Pesquisar produto..."
                                oninput="filterTable()"/>
                     </div>
-                    <select id="filterPerfil" class="filter-select" onchange="filterTable()">
-                        <option value="">Todos os perfis</option>
-                        <option value="cliente">Cliente</option>
-                        <option value="funcionário">Funcionário</option>
-                        <option value="admin">Admin</option>
-                    </select>
                     <select id="filterEstado" class="filter-select" onchange="filterTable()">
-                        <option value="">Todos os estados</option>
+                        <option value="">Todos</option>
                         <option value="ativo">Ativo</option>
                         <option value="inativo">Inativo</option>
+                    </select>
+                    <select id="filterSort" class="filter-select" onchange="sortTable()">
+                        <option value="nome">Ordenar: Nome &#8593;</option>
+                        <option value="preco">Ordenar: Preço</option>
+                        <option value="stock">Ordenar: Stock</option>
                     </select>
                 </div>
 
                 <!-- Table -->
-                <table class="users-table" id="usersTable">
+                <table class="products-table" id="productsTable">
                     <thead>
                     <tr>
-                        <th>Nome</th>
-                        <th>Email</th>
-                        <th>Perfil</th>
+                        <th>Nome &#8593;</th>
+                        <th>Descrição</th>
+                        <th>Preço</th>
+                        <th>Stock</th>
                         <th>Estado</th>
                         <th>Ações</th>
                     </tr>
                     </thead>
                     <tbody>
                     <%
-                        for (Object[] u : users) {
-                            String uid      = (String)  u[0];
-                            String unome    = (String)  u[1];
-                            String uemail   = (String)  u[2];
-                            String utel     = (String)  u[3];
-                            String uperfil  = (String)  u[4];
-                            boolean uativo  = (Boolean) u[5];
-                            int    usaldo   = (Integer) u[6];
-                            int    uenc     = (Integer) u[7];
-                            String umembro  = (String)  u[8];
+                        for (Object[] p : products) {
+                            String pid    = (String)  p[0];
+                            String pnome  = (String)  p[1];
+                            String pdesc  = (String)  p[2];
+                            int    ppreco = (Integer) p[3];
+                            int    pstock = (Integer) p[4];
+                            boolean pativo = (Boolean) p[5];
 
-                            String saldoStr = String.format("%d,%02d €", usaldo / 100, usaldo % 100);
-                            boolean isSelected = uid.equals(selectedId);
-
-                            String perfilClass = "badge-cliente";
-                            if ("Funcionário".equals(uperfil)) perfilClass = "badge-funcionario";
-                            else if ("Admin".equals(uperfil))  perfilClass = "badge-admin";
+                            String precoStr = String.format("%d,%02d €", ppreco / 100, ppreco % 100);
+                            boolean isSelected = pid.equals(selectedId) && !isNovo;
                     %>
                     <tr class="<%= isSelected ? "selected" : "" %>"
-                        data-nome="<%= unome.toLowerCase() %>"
-                        data-perfil="<%= uperfil.toLowerCase() %>"
-                        data-ativo="<%= uativo ? "ativo" : "inativo" %>"
-                        onclick="selectUser('<%= uid %>','<%= unome %>','<%= uemail %>','<%= utel %>','<%= uperfil %>',<%= uativo %>,<%= usaldo %>,'<%= saldoStr %>',<%= uenc %>,'<%= umembro %>')">
-                        <td class="user-nome"><%= unome %></td>
-                        <td class="user-email"><%= uemail %></td>
-                        <td><span class="badge <%= perfilClass %>"><%= uperfil %></span></td>
-                        <td><span class="badge <%= uativo ? "badge-ativo" : "badge-inativo" %>"><%= uativo ? "Ativo" : "Inativo" %></span></td>
+                        data-nome="<%= pnome.toLowerCase() %>"
+                        data-ativo="<%= pativo ? "ativo" : "inativo" %>"
+                        onclick="selectProduct('<%= pid %>','<%= pnome %>','<%= pdesc %>',<%= ppreco %>,<%= pstock %>,<%= pativo %>)">
+                        <td class="product-nome"><%= pnome %></td>
+                        <td class="product-desc"><%= pdesc %></td>
+                        <td><%= precoStr %></td>
+                        <td><%= pstock %></td>
+                        <td><span class="badge <%= pativo ? "badge-ativo" : "badge-inativo" %>"><%= pativo ? "Ativo" : "Inativo" %></span></td>
                         <td onclick="event.stopPropagation()">
                             <div class="action-btns">
                                 <button class="btn-editar"
-                                        onclick="selectUser('<%= uid %>','<%= unome %>','<%= uemail %>','<%= utel %>','<%= uperfil %>',<%= uativo %>,<%= usaldo %>,'<%= saldoStr %>',<%= uenc %>,'<%= umembro %>')">
+                                        onclick="selectProduct('<%= pid %>','<%= pnome %>','<%= pdesc %>',<%= ppreco %>,<%= pstock %>,<%= pativo %>)">
                                     Editar
                                 </button>
-                                <% if (!"Admin".equals(uperfil)) { %>
-                                    <% if (uativo) { %>
-                                    <%-- TODO: ligar a AdminUtilizadoresServlet?action=inativar&id=UID --%>
-                                    <button class="btn-inativar"
-                                            onclick="return confirm('Inativar <%= unome %>?')">
-                                        Inativar
+                                <form method="post" action="produtosAdmin.jsp" style="display:inline;margin:0">
+                                    <input type="hidden" name="action" value="toggleAtivo"/>
+                                    <input type="hidden" name="produtoId" value="<%= pid %>"/>
+                                    <button type="submit" class="<%= pativo ? "btn-inativar" : "btn-ativar" %>"
+                                            onclick="return confirm('<%= pativo ? "Inativar" : "Ativar" %> <%= pnome %>?')">
+                                        <%= pativo ? "Inativar" : "Ativar" %>
                                     </button>
-                                    <% } else { %>
-                                    <%-- TODO: ligar a AdminUtilizadoresServlet?action=ativar&id=UID --%>
-                                    <button class="btn-ativar"
-                                            onclick="return confirm('Ativar <%= unome %>?')">
-                                        Ativar
-                                    </button>
-                                    <% } %>
-                                <% } %>
+                                </form>
                             </div>
                         </td>
                     </tr>
@@ -923,7 +976,7 @@
             <div class="edit-panel">
                 <div class="edit-panel-header">
                     <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-                    <span class="edit-panel-title" id="editPanelTitle">Editar utilizador</span>
+                    <span class="edit-panel-title" id="editPanelTitle">Editar produto</span>
                 </div>
 
                 <!-- Alert -->
@@ -941,88 +994,84 @@
                 <% } %>
 
                 <div id="editFormArea">
-                    <%
-                        String initSaldo  = String.format("%d,%02d €", selSaldo / 100, selSaldo % 100);
-                    %>
+                    <% if (!isNovo && selNome.isEmpty()) { %>
+                    <!-- No product selected -->
+                    <div class="no-selection">
+                        <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-5 12H9v-2h6v2zm2-4H7V8h10v2z"/></svg>
+                        <p>Seleciona um produto para editar</p>
+                    </div>
+                    <% } else { %>
 
-                    <!-- Form — TODO: ligar ao AdminUtilizadoresServlet -->
-                    <form action="AdminUtilizadoresServlet" method="post"
+                    <!-- Photo area — TODO: implementar upload de imagem do produto -->
+                    <div class="photo-area" onclick="alert('TODO: upload de imagem')">
+                        <svg viewBox="0 0 24 24"><path d="M12 15.2A3.2 3.2 0 1 1 12 8.8a3.2 3.2 0 0 1 0 6.4zm0-8.2a5 5 0 1 0 0 10A5 5 0 0 0 12 7zM4 5h2.17L7.4 3.6A1 1 0 0 1 8.26 3h7.48a1 1 0 0 1 .86.6L17.83 5H20a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></svg>
+                        <span>Clica para adicionar foto</span>
+                    </div>
+
+                    <form action="produtosAdmin.jsp" method="post"
                           onsubmit="return confirm('Guardar alterações?')">
                         <input type="hidden" name="action" value="guardar"/>
-                        <input type="hidden" id="hiddenId"    name="userId" value="<%= selectedId %>"/>
-                        <input type="hidden" id="hiddenAtivo" name="ativo"  value="<%= selAtivo %>"/>
-
-                        <div class="form-top-gap"></div>
+                        <input type="hidden" id="hiddenId" name="produtoId" value="<%= isNovo ? "" : selectedId %>"/>
+                        <input type="hidden" id="hiddenAtivo" name="ativo" value="<%= selAtivo %>"/>
 
                         <div class="field-group">
-                            <label class="field-label">Nome completo</label>
+                            <label class="field-label">Nome</label>
                             <input type="text" name="nome" id="fieldNome"
                                    class="field-input"
-                                   value="<%= selNome %>" required/>
+                                   value="<%= selNome %>"
+                                   placeholder="Nome do produto" required/>
                         </div>
 
                         <div class="field-group">
-                            <label class="field-label">Email</label>
-                            <input type="email" name="email" id="fieldEmail"
+                            <label class="field-label">Descrição</label>
+                            <input type="text" name="descricao" id="fieldDesc"
                                    class="field-input"
-                                   value="<%= selEmail %>" required/>
+                                   value="<%= selDesc %>"
+                                   placeholder="Descrição breve"/>
                         </div>
 
-                        <div class="field-group">
-                            <label class="field-label">Telefone</label>
-                            <input type="text" name="telefone" id="fieldTel"
-                                   class="field-input"
-                                   value="<%= selTel %>"/>
-                        </div>
-
-                        <div class="field-group">
-                            <label class="field-label">Perfil</label>
-                            <select name="perfil" id="fieldPerfil" class="field-select">
-                                <option value="Cliente"     <%= "Cliente".equals(selPerfil)     ? "selected" : "" %>>Cliente</option>
-                                <option value="Funcionário" <%= "Funcionário".equals(selPerfil) ? "selected" : "" %>>Funcionário</option>
-                                <option value="Admin"       <%= "Admin".equals(selPerfil)       ? "selected" : "" %>>Admin</option>
-                            </select>
-                        </div>
-
-                        <div class="field-group">
-                            <label class="field-label">Nova password (opcional)</label>
-                            <input type="password" name="password" id="fieldPass"
-                                   class="field-input"
-                                   placeholder="••••••"/>
+                        <div class="fields-row">
+                            <div>
+                                <label class="field-label">Preço (&euro;)</label>
+                                <%
+                                    String precoValStr = selPreco > 0
+                                        ? String.format("%d.%02d", selPreco / 100, selPreco % 100)
+                                        : "";
+                                %>
+                                <input type="number" name="preco" id="fieldPreco"
+                                       class="field-input"
+                                       value="<%= precoValStr %>"
+                                       step="0.01" min="0" placeholder="0,00" required/>
+                            </div>
+                            <div>
+                                <label class="field-label">Stock</label>
+                                <input type="number" name="stock" id="fieldStock"
+                                       class="field-input"
+                                       value="<%= isNovo ? "" : selStock %>"
+                                       min="0" placeholder="0" required/>
+                            </div>
                         </div>
 
                         <div class="edit-actions">
                             <button type="submit" class="btn-guardar">Guardar alterações</button>
-                            <%-- TODO: ligar a AdminUtilizadoresServlet?action=toggleEstado --%>
-                            <% if (!"Admin".equals(selPerfil)) { %>
-                            <button type="button"
-                                    id="btnToggleEstado"
-                                    class="btn-inativar-user"
-                                    onclick="return confirm('<%= selAtivo ? "Inativar" : "Ativar" %> utilizador?')">
-                                <%= selAtivo ? "Inativar utilizador" : "Ativar utilizador" %>
-                            </button>
-                            <% } %>
                         </div>
                     </form>
-
-                    <!-- Resumo -->
-                    <div class="resumo-section" id="resumoSection">
-                        <div class="resumo-title">Resumo</div>
-                        <div class="resumo-row">
-                            <span class="resumo-label">Saldo</span>
-                            <span class="resumo-value green" id="resumoSaldo"><%= initSaldo %></span>
-                        </div>
-                        <div class="resumo-row">
-                            <span class="resumo-label">Encomendas</span>
-                            <span class="resumo-value" id="resumoEnc"><%= selEnc %></span>
-                        </div>
-                        <div class="resumo-row">
-                            <span class="resumo-label">Membro desde</span>
-                            <span class="resumo-value" id="resumoMembro"><%= selMembro %></span>
-                        </div>
+                    <% if (!isNovo && !selNome.isEmpty()) { %>
+                    <div style="padding: 0 16px 16px;">
+                        <form method="post" action="produtosAdmin.jsp" style="margin:0"
+                              onsubmit="return confirm('<%= selAtivo ? "Inativar" : "Ativar" %> produto?')">
+                            <input type="hidden" name="action" value="toggleAtivo"/>
+                            <input type="hidden" name="produtoId" value="<%= selectedId %>"/>
+                            <button type="submit" id="btnToggleEstado"
+                                    class="btn-toggle-estado <%= selAtivo ? "" : "ativar" %>">
+                                <%= selAtivo ? "Inativar produto" : "Ativar produto" %>
+                            </button>
+                        </form>
                     </div>
+                    <% } %>
+                    <% } %>
+                </div>
 
-                </div><!-- end editFormArea -->
             </div><!-- end edit-panel -->
 
         </div><!-- end page-grid -->
@@ -1030,49 +1079,71 @@
 </div>
 
 <script>
-    function selectUser(id, nome, email, tel, perfil, ativo, saldoCents, saldoStr, numEnc, membro) {
+    let currentAtivo = <%= selAtivo %>;
+
+    function selectProduct(id, nome, desc, precoCents, stock, ativo) {
+        document.getElementById('editPanelTitle').textContent = 'Editar produto';
         document.getElementById('hiddenId').value    = id;
         document.getElementById('hiddenAtivo').value = ativo;
         document.getElementById('fieldNome').value   = nome;
-        document.getElementById('fieldEmail').value  = email;
-        document.getElementById('fieldTel').value    = tel;
-        document.getElementById('fieldPass').value   = '';
+        document.getElementById('fieldDesc').value   = desc;
 
-        const sel = document.getElementById('fieldPerfil');
-        for (let i = 0; i < sel.options.length; i++) {
-            sel.options[i].selected = sel.options[i].value === perfil;
-        }
+        const euros = Math.floor(precoCents / 100);
+        const cents = precoCents % 100;
+        document.getElementById('fieldPreco').value  = euros + '.' + String(cents).padStart(2, '0');
+        document.getElementById('fieldStock').value  = stock;
 
         const btn = document.getElementById('btnToggleEstado');
         if (btn) {
-            btn.textContent = ativo ? 'Inativar utilizador' : 'Ativar utilizador';
-            btn.onclick = () => confirm((ativo ? 'Inativar ' : 'Ativar ') + nome + '?');
+            if (ativo) {
+                btn.textContent = 'Inativar produto';
+                btn.classList.remove('ativar');
+                btn.onclick = () => confirm('Inativar ' + nome + '?');
+            } else {
+                btn.textContent = 'Ativar produto';
+                btn.classList.add('ativar');
+                btn.onclick = () => confirm('Ativar ' + nome + '?');
+            }
         }
 
-        document.getElementById('resumoSaldo').textContent  = saldoStr;
-        document.getElementById('resumoEnc').textContent    = numEnc;
-        document.getElementById('resumoMembro').textContent = membro;
-
-        document.querySelectorAll('.users-table tbody tr').forEach(row => row.classList.remove('selected'));
-        document.querySelectorAll('.users-table tbody tr').forEach(row => {
+        document.querySelectorAll('.products-table tbody tr').forEach(row => row.classList.remove('selected'));
+        document.querySelectorAll('.products-table tbody tr').forEach(row => {
             if (row.dataset.nome === nome.toLowerCase()) row.classList.add('selected');
         });
+
+        currentAtivo = ativo;
+    }
+
+    function novoMode() {
+        document.getElementById('editPanelTitle').textContent = 'Novo produto';
+        document.getElementById('hiddenId').value    = '';
+        document.getElementById('hiddenAtivo').value = 'true';
+        document.getElementById('fieldNome').value   = '';
+        document.getElementById('fieldDesc').value   = '';
+        document.getElementById('fieldPreco').value  = '';
+        document.getElementById('fieldStock').value  = '';
+
+        const btn = document.getElementById('btnToggleEstado');
+        if (btn) btn.style.display = 'none';
+
+        document.querySelectorAll('.products-table tbody tr').forEach(row => row.classList.remove('selected'));
     }
 
     function filterTable() {
         const q      = document.getElementById('searchInput').value.toLowerCase();
-        const perfil = document.getElementById('filterPerfil').value.toLowerCase();
-        const estado = document.getElementById('filterEstado').value.toLowerCase();
-        const rows   = document.querySelectorAll('#usersTable tbody tr');
+        const estado = document.getElementById('filterEstado').value;
+        const rows   = document.querySelectorAll('#productsTable tbody tr');
         rows.forEach(row => {
-            const nome   = row.dataset.nome   || '';
-            const rperf  = row.dataset.perfil || '';
-            const rativo = row.dataset.ativo  || '';
+            const nome  = row.dataset.nome  || '';
+            const ativo = row.dataset.ativo || '';
             const matchQ = nome.includes(q);
-            const matchP = !perfil || rperf === perfil;
-            const matchE = !estado || rativo === estado;
-            row.style.display = (matchQ && matchP && matchE) ? '' : 'none';
+            const matchE = !estado || ativo === estado;
+            row.style.display = (matchQ && matchE) ? '' : 'none';
         });
+    }
+
+    function sortTable() {
+        /* TODO: ordenação server-side ou client-side */
     }
 </script>
 

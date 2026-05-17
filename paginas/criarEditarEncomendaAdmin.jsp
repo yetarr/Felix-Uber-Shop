@@ -1,26 +1,223 @@
 ﻿<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*" %>
+<%@ include file="basedados/basedados.h" %>
 <%
-    String adminName  = "Administrador";
-    String orderId    = request.getParameter("id") != null ? request.getParameter("id") : null;
-    boolean isNova    = (orderId == null || "true".equals(request.getParameter("novo")));
+    HttpSession sess = request.getSession(false);
+    if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
+    if (!"administrador".equals(sess.getAttribute("userRole"))) { response.sendRedirect("dashboard.jsp"); return; }
+    String adminName = (String) sess.getAttribute("userName");
+    String orderId   = request.getParameter("id");
+    boolean isNova   = (orderId == null || "true".equals(request.getParameter("novo")));
 
-    String orderCliente = "Ana Silva";
-    String orderData    = "04/05/2026 15:10";
-    String orderStatus  = "Pendente";
-    String saldoCliente = "50,00";
+    String orderCliente = "";
+    String orderData    = "";
+    String orderStatus  = "pendente";
+    String saldoCliente = "0,00";
+    List<Object[]> catalogue = new ArrayList<>();
 
-    // {id, nome, quantidade_label, preco_cents, desconto_%, qty_atual, preco_original_cents}
-    Object[][] catalogue = {
-            {"agua",   "Água",        "1.5L",  49, 0,  0, 49},
-            {"arroz",  "Arroz",       "1kg",   89, 10, 2, 99},
-            {"azeite", "Azeite",      "750ml", 499, 0, 0, 499},
-            {"leite",  "Leite",       "1L",    71, 10, 1, 79},
-            {"pao",    "Pão de forma","",      129, 0,  0, 129},
-    };
+    Connection _conn6 = null;
+    PreparedStatement _ps6 = null;
+    ResultSet _rs6 = null;
+    try {
+        _conn6 = getConnection();
+        int orderIdInt = 0;
+        if (!isNova && orderId != null) {
+            try { orderIdInt = Integer.parseInt(orderId); } catch (Exception _ex6) {}
+        }
 
-    String errorMsg   = (String) request.getAttribute("error");
-    String successMsg = (String) request.getAttribute("success");
+        int clientUserId = 0;
+        if (!isNova && orderIdInt > 0) {
+            // Order details + client
+            _ps6 = _conn6.prepareStatement(
+                "SELECT e.estado, e.data_encomenda, u.nome, u.id_utilizador " +
+                "FROM encomenda e JOIN utilizadores u ON u.id_utilizador=e.id_utilizador " +
+                "WHERE e.id_encomenda=?");
+            _ps6.setInt(1, orderIdInt);
+            _rs6 = _ps6.executeQuery();
+            if (_rs6.next()) {
+                orderStatus  = _rs6.getString("estado");
+                orderData    = String.valueOf(_rs6.getTimestamp("data_encomenda"));
+                orderCliente = _rs6.getString("nome");
+                clientUserId = _rs6.getInt("id_utilizador");
+            }
+            closeAll(_rs6, _ps6, null);
+
+            // Client wallet balance
+            if (clientUserId > 0) {
+                _ps6 = _conn6.prepareStatement("SELECT saldo FROM carteira WHERE id_utilizador=?");
+                _ps6.setInt(1, clientUserId);
+                _rs6 = _ps6.executeQuery();
+                if (_rs6.next()) {
+                    saldoCliente = String.format("%.2f", _rs6.getDouble("saldo")).replace(".", ",");
+                }
+                closeAll(_rs6, _ps6, null);
+            }
+        }
+
+        // Catalogue with current order quantities
+        _ps6 = _conn6.prepareStatement(
+            "SELECT p.id_produto, p.nome, p.categoria, CAST(p.preco*100 AS SIGNED) as preco_cents, " +
+            "0 as desconto, COALESCE(ep.quantidade,0) as qty_atual, CAST(p.preco*100 AS SIGNED) as preco_orig " +
+            "FROM produtos p " +
+            "LEFT JOIN encomenda_produto ep ON ep.id_produto=p.id_produto AND ep.id_encomenda=? " +
+            "WHERE p.ativo=1 ORDER BY p.nome");
+        _ps6.setInt(1, orderIdInt);
+        _rs6 = _ps6.executeQuery();
+        while (_rs6.next()) {
+            catalogue.add(new Object[]{
+                String.valueOf(_rs6.getInt("id_produto")),
+                _rs6.getString("nome"),
+                _rs6.getString("categoria") != null ? _rs6.getString("categoria") : "",
+                (int) _rs6.getLong("preco_cents"),
+                0,
+                _rs6.getInt("qty_atual"),
+                (int) _rs6.getLong("preco_orig")
+            });
+        }
+    } catch (Exception _e6) {
+        // page renders with empty data on error
+    } finally {
+        closeAll(_rs6, _ps6, _conn6);
+    }
+
+    String successMsg = (String) sess.getAttribute("success");
+    if (successMsg != null) sess.removeAttribute("success");
+    String errorMsg = null;
+
+    if ("POST".equalsIgnoreCase(request.getMethod())) {
+        String orderIdStr = request.getParameter("orderId");
+        String novoEstado = request.getParameter("estado");
+        String clienteIdStr = request.getParameter("clienteId");
+        try {
+            Connection conn = getConnection();
+            PreparedStatement ps;
+            ResultSet rs;
+            int oid;
+
+            if (orderIdStr == null || orderIdStr.isEmpty()) {
+                // Create new order
+                int cid = Integer.parseInt(clienteIdStr);
+                String codigoUnico = "FUS-" + System.currentTimeMillis();
+                ps = conn.prepareStatement(
+                    "INSERT INTO encomenda (codigo_unico, id_utilizador, estado, total) VALUES (?, ?, 'pendente', 0)",
+                    java.sql.Statement.RETURN_GENERATED_KEYS);
+                ps.setString(1, codigoUnico); ps.setInt(2, cid);
+                ps.executeUpdate();
+                rs = ps.getGeneratedKeys(); oid = rs.next() ? rs.getInt(1) : -1; rs.close(); ps.close();
+                if (oid < 0) { conn.close(); errorMsg = "Erro ao criar encomenda."; }
+                else {
+                    double total = 0;
+                    for (java.util.Enumeration<String> params = request.getParameterNames(); params.hasMoreElements();) {
+                        String param = params.nextElement();
+                        if (param.startsWith("produto_")) {
+                            int pid = Integer.parseInt(param.substring("produto_".length()));
+                            int qty = Integer.parseInt(request.getParameter(param));
+                            if (qty > 0) {
+                                ps = conn.prepareStatement("SELECT preco FROM produtos WHERE id_produto = ?");
+                                ps.setInt(1, pid); rs = ps.executeQuery();
+                                double preco = rs.next() ? rs.getDouble("preco") : 0; rs.close(); ps.close();
+                                ps = conn.prepareStatement("INSERT INTO encomenda_produto (id_encomenda, id_produto, quantidade, preco_unitario) VALUES (?,?,?,?)");
+                                ps.setInt(1, oid); ps.setInt(2, pid); ps.setInt(3, qty); ps.setDouble(4, preco);
+                                ps.executeUpdate(); ps.close();
+                                total += preco * qty;
+                            }
+                        }
+                    }
+                    ps = conn.prepareStatement("UPDATE encomenda SET total = ? WHERE id_encomenda = ?");
+                    ps.setDouble(1, total); ps.setInt(2, oid); ps.executeUpdate(); closeAll(null, ps, conn);
+                    sess.setAttribute("success", "Encomenda criada com sucesso.");
+                    response.sendRedirect("criarEditarEncomendaAdmin.jsp?id=" + oid); return;
+                }
+            } else {
+                oid = Integer.parseInt(orderIdStr);
+                ps = conn.prepareStatement(
+                    "SELECT e.estado, e.total, e.id_utilizador FROM encomenda e WHERE e.id_encomenda = ?");
+                ps.setInt(1, oid); rs = ps.executeQuery();
+                if (!rs.next()) { rs.close(); ps.close(); conn.close(); errorMsg = "Encomenda não encontrada."; }
+                else {
+                    String estadoAnterior = rs.getString("estado");
+                    int clienteUserId2 = rs.getInt("id_utilizador");
+                    rs.close(); ps.close();
+
+                    ps = conn.prepareStatement("DELETE FROM encomenda_produto WHERE id_encomenda = ?");
+                    ps.setInt(1, oid); ps.executeUpdate(); ps.close();
+                    double total = 0;
+                    for (java.util.Enumeration<String> params = request.getParameterNames(); params.hasMoreElements();) {
+                        String param = params.nextElement();
+                        if (param.startsWith("produto_")) {
+                            int pid = Integer.parseInt(param.substring("produto_".length()));
+                            int qty = Integer.parseInt(request.getParameter(param));
+                            if (qty > 0) {
+                                ps = conn.prepareStatement("SELECT preco FROM produtos WHERE id_produto = ?");
+                                ps.setInt(1, pid); rs = ps.executeQuery();
+                                double preco = rs.next() ? rs.getDouble("preco") : 0; rs.close(); ps.close();
+                                ps = conn.prepareStatement("INSERT INTO encomenda_produto (id_encomenda, id_produto, quantidade, preco_unitario) VALUES (?,?,?,?)");
+                                ps.setInt(1, oid); ps.setInt(2, pid); ps.setInt(3, qty); ps.setDouble(4, preco);
+                                ps.executeUpdate(); ps.close();
+                                total += preco * qty;
+                            }
+                        }
+                    }
+                    ps = conn.prepareStatement("UPDATE encomenda SET total = ? WHERE id_encomenda = ?");
+                    ps.setDouble(1, total); ps.setInt(2, oid); ps.executeUpdate(); ps.close();
+
+                    if (novoEstado != null && !novoEstado.equals(estadoAnterior)) {
+                        if ("pronto".equals(novoEstado) && !"pronto".equals(estadoAnterior)) {
+                            ps = conn.prepareStatement("SELECT c.id_carteira, c.saldo FROM carteira c WHERE c.id_utilizador = ?");
+                            ps.setInt(1, clienteUserId2); rs = ps.executeQuery();
+                            int cCart = rs.next() ? rs.getInt("id_carteira") : -1;
+                            double saldoC = rs.getDouble("saldo"); rs.close(); ps.close();
+                            ps = conn.prepareStatement("SELECT id_carteira FROM carteira WHERE is_loja = 1 LIMIT 1");
+                            rs = ps.executeQuery(); int lCart = rs.next() ? rs.getInt("id_carteira") : -1; rs.close(); ps.close();
+                            if (saldoC < total) { conn.close(); errorMsg = "Saldo insuficiente do cliente para confirmar."; }
+                            else {
+                                ps = conn.prepareStatement("UPDATE carteira SET saldo = saldo - ? WHERE id_carteira = ?");
+                                ps.setDouble(1, total); ps.setInt(2, cCart); ps.executeUpdate(); ps.close();
+                                ps = conn.prepareStatement("UPDATE carteira SET saldo = saldo + ? WHERE id_carteira = ?");
+                                ps.setDouble(1, total); ps.setInt(2, lCart); ps.executeUpdate(); ps.close();
+                                ps = conn.prepareStatement("INSERT INTO auditoria_carteira (id_carteira_origem, id_carteira_destino, valor, tipo_operacao, descricao, id_encomenda) VALUES (?,?,?,'pagamento',?,?)");
+                                ps.setInt(1, cCart); ps.setInt(2, lCart); ps.setDouble(3, total);
+                                ps.setString(4, "Pagamento encomenda #" + oid); ps.setInt(5, oid);
+                                ps.executeUpdate(); ps.close();
+                                ps = conn.prepareStatement("UPDATE encomenda SET estado = ? WHERE id_encomenda = ?");
+                                ps.setString(1, novoEstado); ps.setInt(2, oid); ps.executeUpdate(); closeAll(null, ps, conn);
+                                sess.setAttribute("success", "Encomenda confirmada e pagamento processado.");
+                                response.sendRedirect("criarEditarEncomendaAdmin.jsp?id=" + oid); return;
+                            }
+                        } else if ("cancelado".equals(novoEstado) && "pronto".equals(estadoAnterior)) {
+                            ps = conn.prepareStatement("SELECT c.id_carteira FROM carteira c WHERE c.id_utilizador = ?");
+                            ps.setInt(1, clienteUserId2); rs = ps.executeQuery();
+                            int cCart = rs.next() ? rs.getInt("id_carteira") : -1; rs.close(); ps.close();
+                            ps = conn.prepareStatement("SELECT id_carteira FROM carteira WHERE is_loja = 1 LIMIT 1");
+                            rs = ps.executeQuery(); int lCart = rs.next() ? rs.getInt("id_carteira") : -1; rs.close(); ps.close();
+                            ps = conn.prepareStatement("UPDATE carteira SET saldo = saldo + ? WHERE id_carteira = ?");
+                            ps.setDouble(1, total); ps.setInt(2, cCart); ps.executeUpdate(); ps.close();
+                            ps = conn.prepareStatement("UPDATE carteira SET saldo = saldo - ? WHERE id_carteira = ?");
+                            ps.setDouble(1, total); ps.setInt(2, lCart); ps.executeUpdate(); ps.close();
+                            ps = conn.prepareStatement("INSERT INTO auditoria_carteira (id_carteira_origem, id_carteira_destino, valor, tipo_operacao, descricao, id_encomenda) VALUES (?,?,?,'reembolso',?,?)");
+                            ps.setInt(1, lCart); ps.setInt(2, cCart); ps.setDouble(3, total);
+                            ps.setString(4, "Reembolso encomenda cancelada #" + oid); ps.setInt(5, oid);
+                            ps.executeUpdate(); ps.close();
+                            ps = conn.prepareStatement("UPDATE encomenda SET estado = ? WHERE id_encomenda = ?");
+                            ps.setString(1, novoEstado); ps.setInt(2, oid); ps.executeUpdate(); closeAll(null, ps, conn);
+                            sess.setAttribute("success", "Encomenda cancelada e reembolso processado.");
+                            response.sendRedirect("criarEditarEncomendaAdmin.jsp?id=" + oid); return;
+                        } else {
+                            ps = conn.prepareStatement("UPDATE encomenda SET estado = ? WHERE id_encomenda = ?");
+                            ps.setString(1, novoEstado); ps.setInt(2, oid); ps.executeUpdate(); closeAll(null, ps, conn);
+                            sess.setAttribute("success", "Encomenda atualizada.");
+                            response.sendRedirect("criarEditarEncomendaAdmin.jsp?id=" + oid); return;
+                        }
+                    } else {
+                        conn.close();
+                        sess.setAttribute("success", "Encomenda atualizada com sucesso.");
+                        response.sendRedirect("criarEditarEncomendaAdmin.jsp?id=" + oid); return;
+                    }
+                }
+            }
+        } catch (Exception e) { errorMsg = "Erro: " + e.getMessage(); }
+    }
+
     String activePage = "encomendas";
 %>
 <!DOCTYPE html>
@@ -848,13 +1045,26 @@
 
                     <div class="saldo-warn" id="saldoWarn">&#9888; Saldo insuficiente.</div>
 
+                    <% if (!isNova) { %>
+                    <div style="padding:10px 16px;border-bottom:1px solid #2e2e2e;">
+                        <div style="font-size:.76rem;color:#777;margin-bottom:5px;">Alterar estado</div>
+                        <select id="estadoSelect" class="estado-select" style="width:100%;background:#1e1e1e;border:1px solid #3a3a3a;border-radius:7px;color:#ddd;font-size:.85rem;padding:8px 10px;outline:none;">
+                            <option value="pendente"    <%= "pendente".equals(orderStatus)    ? "selected" : "" %>>Pendente</option>
+                            <option value="processando" <%= "processando".equals(orderStatus) ? "selected" : "" %>>Processando</option>
+                            <option value="pronto"      <%= "pronto".equals(orderStatus)      ? "selected" : "" %>>Pronto</option>
+                            <option value="cancelado"   <%= "cancelado".equals(orderStatus)   ? "selected" : "" %>>Cancelado</option>
+                        </select>
+                    </div>
+                    <% } %>
+
                     <div class="action-btns">
-                        <form id="orderForm" action="AdminEditarEncomendaServlet" method="post"
+                        <form id="orderForm" action="criarEditarEncomendaAdmin.jsp" method="post"
                               onsubmit="return prepareSubmit()">
                             <% if (orderId != null) { %>
                             <input type="hidden" name="orderId" value="<%= orderId %>"/>
                             <% } %>
-                            <input type="hidden" name="clienteId" value="<%= orderCliente %>"/>
+                            <input type="hidden" name="clienteId" value="<%= clientUserId %>"/>
+                            <input type="hidden" id="estadoHidden" name="estado" value="<%= orderStatus %>"/>
                             <div id="hiddenInputs"></div>
                             <button type="submit" class="btn-confirmar" id="btnConfirmar">
                                 Confirmar encomenda
@@ -965,6 +1175,13 @@
         const insuf = total > Math.round(saldo * 100);
         document.getElementById('saldoWarn').style.display = insuf ? 'block' : 'none';
         document.getElementById('btnConfirmar').disabled = insuf;
+    }
+
+    const estadoSelectEl = document.getElementById('estadoSelect');
+    if (estadoSelectEl) {
+        estadoSelectEl.addEventListener('change', function () {
+            document.getElementById('estadoHidden').value = this.value;
+        });
     }
 
     function prepareSubmit() {

@@ -1,20 +1,93 @@
 ﻿<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*" %>
+<%@ include file="basedados/basedados.h" %>
 <%
-    String adminName = "Administrador";
+    HttpSession sess = request.getSession(false);
+    if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
+    if (!"administrador".equalsIgnoreCase((String) sess.getAttribute("userRole"))) { response.sendRedirect("dashboard.jsp"); return; }
+    String adminName = (String) sess.getAttribute("userName");
 
-    Object[][] clients = {
-            {"1", "Ana Silva",    "ana@email.com",   5000},
-            {"2", "João Costa",   "joao@email.com",  1250},
-            {"3", "Maria Santos", "maria@email.com",    0},
-            {"4", "Rui Faria",    "rui@email.com",   3000},
-    };
+    String successMsg = (String) sess.getAttribute("success");
+    if (successMsg != null) sess.removeAttribute("success");
+    String errorMsg = null;
 
-    String successMsg = (String) request.getAttribute("success");
-    String errorMsg   = (String) request.getAttribute("error");
+    if ("POST".equalsIgnoreCase(request.getMethod())) {
+        String acao = request.getParameter("action");
+        String clienteIdStr = request.getParameter("clienteId");
+        String valorStr = request.getParameter("valor");
+        try {
+            if (clienteIdStr == null || clienteIdStr.isBlank()) throw new Exception("Cliente não selecionado.");
+            if (valorStr == null || valorStr.isBlank()) throw new Exception("Valor inválido.");
+            int clienteId = Integer.parseInt(clienteIdStr);
+            double valor = Double.parseDouble(valorStr.replace(",", "."));
+            if (valor <= 0) throw new Exception("O valor deve ser superior a 0.");
 
-    String selectedId = request.getParameter("clienteId") != null
-            ? request.getParameter("clienteId") : "1";
+            Connection connPost = getConnection();
+            PreparedStatement psPost = connPost.prepareStatement("SELECT id_carteira FROM carteira WHERE id_utilizador = ?");
+            psPost.setInt(1, clienteId); ResultSet rsPost = psPost.executeQuery();
+            int clienteCartId = rsPost.next() ? rsPost.getInt("id_carteira") : -1; rsPost.close(); psPost.close();
+            psPost = connPost.prepareStatement("SELECT id_carteira FROM carteira WHERE is_loja = 1 LIMIT 1");
+            rsPost = psPost.executeQuery(); int lojaCartId = rsPost.next() ? rsPost.getInt("id_carteira") : -1; rsPost.close(); psPost.close();
+            if (clienteCartId < 0) throw new Exception("Carteira do cliente não encontrada.");
+
+            if ("adicionar".equals(acao)) {
+                psPost = connPost.prepareStatement("UPDATE carteira SET saldo = saldo + ? WHERE id_carteira = ?");
+                psPost.setDouble(1, valor); psPost.setInt(2, clienteCartId); psPost.executeUpdate(); psPost.close();
+                psPost = connPost.prepareStatement("INSERT INTO auditoria_carteira (id_carteira_origem, id_carteira_destino, valor, tipo_operacao, descricao) VALUES (?,?,?,'deposito',?)");
+                psPost.setInt(1, lojaCartId); psPost.setInt(2, clienteCartId); psPost.setDouble(3, valor);
+                psPost.setString(4, "Depósito via administrador"); psPost.executeUpdate(); closeAll(null, psPost, connPost);
+                sess.setAttribute("success", String.format("Depósito de %.2f € adicionado.", valor).replace(".", ","));
+            } else if ("retirar".equals(acao)) {
+                psPost = connPost.prepareStatement("SELECT saldo FROM carteira WHERE id_carteira = ?");
+                psPost.setInt(1, clienteCartId); rsPost = psPost.executeQuery();
+                double saldoAtual = rsPost.next() ? rsPost.getDouble("saldo") : 0; rsPost.close(); psPost.close();
+                if (valor > saldoAtual) throw new Exception("Saldo insuficiente.");
+                psPost = connPost.prepareStatement("UPDATE carteira SET saldo = saldo - ? WHERE id_carteira = ?");
+                psPost.setDouble(1, valor); psPost.setInt(2, clienteCartId); psPost.executeUpdate(); psPost.close();
+                psPost = connPost.prepareStatement("INSERT INTO auditoria_carteira (id_carteira_origem, id_carteira_destino, valor, tipo_operacao, descricao) VALUES (?,?,?,'levantamento',?)");
+                psPost.setInt(1, clienteCartId); psPost.setInt(2, lojaCartId); psPost.setDouble(3, valor);
+                psPost.setString(4, "Retirada via administrador"); psPost.executeUpdate(); closeAll(null, psPost, connPost);
+                sess.setAttribute("success", String.format("Saldo de %.2f € retirado.", valor).replace(".", ","));
+            }
+            response.sendRedirect("saldoClientesAdmin.jsp?clienteId=" + clienteId); return;
+        } catch (Exception e) { errorMsg = e.getMessage(); }
+    }
+
+    List<Object[]> clients = new ArrayList<>();
+
+    Connection conn = null;
+    PreparedStatement ps = null;
+    ResultSet rs = null;
+    try {
+        conn = getConnection();
+        ps = conn.prepareStatement(
+            "SELECT u.id_utilizador, u.nome, u.email, COALESCE(c.saldo, 0) as saldo" +
+            " FROM utilizadores u" +
+            " LEFT JOIN carteira c ON c.id_utilizador = u.id_utilizador" +
+            " WHERE u.perfil = 'cliente' AND u.ativo = 1" +
+            " ORDER BY u.nome");
+        rs = ps.executeQuery();
+        while (rs.next()) {
+            double saldo = rs.getDouble("saldo");
+            int saldoCents = (int)(saldo * 100);
+            clients.add(new Object[]{
+                String.valueOf(rs.getInt("id_utilizador")),
+                rs.getString("nome"),
+                rs.getString("email"),
+                saldoCents
+            });
+        }
+    } catch (Exception e) {
+        errorMsg = "Erro ao carregar clientes: " + e.getMessage();
+    } finally {
+        closeAll(rs, ps, conn);
+    }
+
+    String selectedId = request.getParameter("clienteId");
+    if ((selectedId == null || selectedId.isEmpty()) && !clients.isEmpty()) {
+        selectedId = (String) clients.get(0)[0];
+    }
+    if (selectedId == null) selectedId = "";
 
     String selName  = "";
     String selEmail = "";
@@ -737,7 +810,7 @@
                 <!-- ADD saldo -->
                 <div class="saldo-action">
                     <div class="action-label">Valor a adicionar (&euro;)</div>
-                    <form action="GerirSaldoServlet" method="post"
+                    <form action="saldoClientesAdmin.jsp" method="post"
                           onsubmit="return confirmAction('adicionar')">
                         <input type="hidden" name="action" value="adicionar"/>
                         <input type="hidden" name="clienteId" id="addClienteId" value="<%= selectedId %>"/>
@@ -751,7 +824,7 @@
                 <!-- REMOVE saldo -->
                 <div class="saldo-action">
                     <div class="action-label">Valor a retirar (&euro;)</div>
-                    <form action="GerirSaldoServlet" method="post"
+                    <form action="saldoClientesAdmin.jsp" method="post"
                           onsubmit="return confirmAction('retirar')">
                         <input type="hidden" name="action" value="retirar"/>
                         <input type="hidden" name="clienteId" id="remClienteId" value="<%= selectedId %>"/>

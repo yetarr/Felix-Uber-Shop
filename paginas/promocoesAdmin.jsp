@@ -1,35 +1,140 @@
 ﻿<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*" %>
+<%@ page import="java.security.MessageDigest, java.nio.charset.StandardCharsets" %>
+<%@ include file="basedados/basedados.h" %>
+<%!
+    private String hashPassword(String plain) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] h = md.digest(plain.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : h) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) { throw new RuntimeException(e); }
+    }
+%>
 <%
-    String adminName = "Administrador";
+    HttpSession sess = request.getSession(false);
+    if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
+    if (!"administrador".equals(sess.getAttribute("userRole"))) { response.sendRedirect("dashboard.jsp"); return; }
+    String adminName = (String) sess.getAttribute("userName");
     String activePage = "promocoes";
 
-    // {id, titulo, desconto_pct, data_inicio, data_fim, produto_ids_csv, ativo}
-    Object[][] promos = {
-        {"1", "Promoção de Primavera", 10, "2026-04-01", "2026-04-30", "arroz,leite",        true},
-        {"2", "Promoção de Verão",     15, "2026-06-01", "2026-08-31", "arroz,azeite,leite", false},
-    };
+    String successMsg = (String) sess.getAttribute("success"); if (successMsg != null) sess.removeAttribute("success");
+    String errorMsg = null;
 
-    // {id, nome, preco_cents}
-    Object[][] catalogue = {
-        {"arroz",  "Arroz 1kg",    99},
-        {"azeite", "Azeite 750ml", 499},
-        {"leite",  "Leite 1L",     70},
-        {"pao",    "Pão de forma", 129},
-        {"agua",   "Água 1.5L",    49},
-    };
+    if ("POST".equalsIgnoreCase(request.getMethod())) {
+        String postAction = request.getParameter("action");
 
-    String successMsg = (String) request.getAttribute("success");
-    String errorMsg   = (String) request.getAttribute("error");
+        if ("guardar".equals(postAction)) {
+            String promoId = request.getParameter("promoId");
+            String titulo = request.getParameter("titulo");
+            String descontoStr = request.getParameter("desconto");
+            String dataInicio = request.getParameter("dataInicio");
+            String dataFim = request.getParameter("dataFim");
+            boolean ativo = "true".equalsIgnoreCase(request.getParameter("ativo"));
+            String[] produtosIds = request.getParameterValues("produtos");
+
+            if (titulo == null || titulo.isBlank() || descontoStr == null || dataInicio == null || dataFim == null) {
+                errorMsg = "Todos os campos são obrigatórios.";
+            } else {
+                try {
+                    double desconto = Double.parseDouble(descontoStr.replace(",", "."));
+                    Connection conn = getConnection();
+                    int savedId;
+                    if (promoId == null || promoId.isBlank()) {
+                        PreparedStatement ps = conn.prepareStatement(
+                            "INSERT INTO promocoes (titulo, desconto_percentagem, data_inicio, data_fim, ativo) VALUES (?,?,?,?,?)",
+                            PreparedStatement.RETURN_GENERATED_KEYS);
+                        ps.setString(1, titulo.trim()); ps.setDouble(2, desconto);
+                        ps.setString(3, dataInicio); ps.setString(4, dataFim); ps.setInt(5, ativo ? 1 : 0);
+                        ps.executeUpdate();
+                        ResultSet keys = ps.getGeneratedKeys(); savedId = keys.next() ? keys.getInt(1) : -1; keys.close(); ps.close();
+                    } else {
+                        savedId = Integer.parseInt(promoId);
+                        PreparedStatement ps = conn.prepareStatement(
+                            "UPDATE promocoes SET titulo=?, desconto_percentagem=?, data_inicio=?, data_fim=?, ativo=? WHERE id_promocao=?");
+                        ps.setString(1, titulo.trim()); ps.setDouble(2, desconto);
+                        ps.setString(3, dataInicio); ps.setString(4, dataFim);
+                        ps.setInt(5, ativo ? 1 : 0); ps.setInt(6, savedId);
+                        ps.executeUpdate(); ps.close();
+                    }
+                    PreparedStatement ps = conn.prepareStatement("DELETE FROM promocao_produto WHERE id_promocao = ?");
+                    ps.setInt(1, savedId); ps.executeUpdate(); ps.close();
+                    if (produtosIds != null) {
+                        ps = conn.prepareStatement("INSERT INTO promocao_produto (id_promocao, id_produto) VALUES (?,?)");
+                        for (String pid : produtosIds) {
+                            ps.setInt(1, savedId); ps.setInt(2, Integer.parseInt(pid)); ps.executeUpdate();
+                        }
+                        ps.close();
+                    }
+                    conn.close();
+                    sess.setAttribute("success", "Promoção guardada com sucesso.");
+                    response.sendRedirect("promocoesAdmin.jsp?promoId=" + savedId); return;
+                } catch (NumberFormatException e) { errorMsg = "Desconto inválido."; }
+                catch (Exception e) { errorMsg = "Erro: " + e.getMessage(); }
+            }
+        } else if ("toggleAtivo".equals(postAction)) {
+            String pid = request.getParameter("promoId");
+            try {
+                Connection conn = getConnection();
+                PreparedStatement ps = conn.prepareStatement("UPDATE promocoes SET ativo = 1 - ativo WHERE id_promocao = ?");
+                ps.setInt(1, Integer.parseInt(pid)); ps.executeUpdate(); closeAll(null, ps, conn);
+                sess.setAttribute("success", "Estado da promoção alterado.");
+                response.sendRedirect("promocoesAdmin.jsp?promoId=" + pid); return;
+            } catch (Exception e) { errorMsg = "Erro: " + e.getMessage(); }
+        }
+    }
+
+    List<Object[]> promos = new ArrayList<>();
+    List<Object[]> catalogue = new ArrayList<>();
+    Connection _conn2 = null;
+    PreparedStatement _ps2 = null;
+    ResultSet _rs2 = null;
+    try {
+        _conn2 = getConnection();
+        // Load promos
+        _ps2 = _conn2.prepareStatement(
+            "SELECT id_promocao, titulo, desconto_percentagem, data_inicio, data_fim, ativo " +
+            "FROM promocoes ORDER BY id_promocao");
+        _rs2 = _ps2.executeQuery();
+        while (_rs2.next()) {
+            promos.add(new Object[]{
+                String.valueOf(_rs2.getInt("id_promocao")),
+                _rs2.getString("titulo"),
+                _rs2.getBigDecimal("desconto_percentagem").intValue(),
+                _rs2.getString("data_inicio"),
+                _rs2.getString("data_fim"),
+                _rs2.getInt("ativo") != 0
+            });
+        }
+        closeAll(_rs2, _ps2, null);
+        // Load catalogue
+        _ps2 = _conn2.prepareStatement(
+            "SELECT id_produto, nome, CAST(preco*100 AS SIGNED) as preco_cents " +
+            "FROM produtos WHERE ativo=1 ORDER BY nome");
+        _rs2 = _ps2.executeQuery();
+        while (_rs2.next()) {
+            catalogue.add(new Object[]{
+                String.valueOf(_rs2.getInt("id_produto")),
+                _rs2.getString("nome"),
+                (int) _rs2.getLong("preco_cents")
+            });
+        }
+    } catch (Exception _e2) {
+        // page renders with empty lists
+    } finally {
+        closeAll(_rs2, _ps2, _conn2);
+    }
 
     String selectedId = request.getParameter("promoId") != null
-            ? request.getParameter("promoId") : "1";
+            ? request.getParameter("promoId")
+            : (!promos.isEmpty() ? (String) promos.get(0)[0] : "");
 
     String  selTitulo   = "";
     int     selDesconto = 0;
     String  selInicio   = "";
     String  selFim      = "";
-    String  selProdIds  = "";
     boolean selAtivo    = true;
 
     for (Object[] p : promos) {
@@ -38,13 +143,32 @@
             selDesconto = (Integer) p[2];
             selInicio   = (String)  p[3];
             selFim      = (String)  p[4];
-            selProdIds  = (String)  p[5];
-            selAtivo    = (Boolean) p[6];
+            selAtivo    = (Boolean) p[5];
             break;
         }
     }
 
-    Set<String> selProds = new HashSet<>(Arrays.asList(selProdIds.split(",")));
+    // Load product ids for selected promo
+    Set<String> selProds = new HashSet<>();
+    if (!selectedId.isEmpty()) {
+        Connection _conn2b = null;
+        PreparedStatement _ps2b = null;
+        ResultSet _rs2b = null;
+        try {
+            _conn2b = getConnection();
+            _ps2b = _conn2b.prepareStatement(
+                "SELECT id_produto FROM promocao_produto WHERE id_promocao = ?");
+            _ps2b.setInt(1, Integer.parseInt(selectedId));
+            _rs2b = _ps2b.executeQuery();
+            while (_rs2b.next()) {
+                selProds.add(String.valueOf(_rs2b.getInt("id_produto")));
+            }
+        } catch (Exception _e2b) {
+            // empty selProds on error
+        } finally {
+            closeAll(_rs2b, _ps2b, _conn2b);
+        }
+    }
 %>
 <!DOCTYPE html>
 <html lang="pt">
@@ -465,14 +589,15 @@
                             int     pdesc    = (Integer) pr[2];
                             String  pinicio  = (String)  pr[3];
                             String  pfim     = (String)  pr[4];
-                            String  pprodIds = (String)  pr[5];
-                            boolean pativo   = (Boolean) pr[6];
-
-                            int numProds = pprodIds.isEmpty() ? 0 : pprodIds.split(",").length;
+                            boolean pativo   = (Boolean) pr[5];
 
                             // DD/MM/YYYY display
-                            String inicioDisplay = pinicio.substring(8) + "/" + pinicio.substring(5,7) + "/" + pinicio.substring(0,4);
-                            String fimDisplay    = pfim.substring(8)    + "/" + pfim.substring(5,7)    + "/" + pfim.substring(0,4);
+                            String inicioDisplay = (pinicio != null && pinicio.length() >= 10)
+                                ? pinicio.substring(8) + "/" + pinicio.substring(5,7) + "/" + pinicio.substring(0,4)
+                                : (pinicio != null ? pinicio : "");
+                            String fimDisplay = (pfim != null && pfim.length() >= 10)
+                                ? pfim.substring(8) + "/" + pfim.substring(5,7) + "/" + pfim.substring(0,4)
+                                : (pfim != null ? pfim : "");
 
                             boolean isSel = pid.equals(selectedId);
                     %>
@@ -484,18 +609,19 @@
                         <td class="desconto-val"><%= pdesc %>%</td>
                         <td><%= inicioDisplay %></td>
                         <td><%= fimDisplay %></td>
-                        <td><%= numProds %> produto<%= numProds != 1 ? "s" : "" %></td>
+                        <td>—</td>
                         <td><span class="badge <%= pativo ? "badge-ativo" : "badge-inativo" %>"><%= pativo ? "Ativo" : "Inativo" %></span></td>
                         <td onclick="event.stopPropagation()">
                             <div class="action-btns">
                                 <button class="btn-editar" onclick="selectPromo('<%= pid %>')">Editar</button>
-                                <% if (pativo) { %>
-                                <%-- TODO: ligar a AdminPromocoesServlet?action=inativar --%>
-                                <button class="btn-inativar" onclick="return confirm('Inativar <%= ptitulo %>?')">Inativar</button>
-                                <% } else { %>
-                                <%-- TODO: ligar a AdminPromocoesServlet?action=ativar --%>
-                                <button class="btn-ativar" onclick="return confirm('Ativar <%= ptitulo %>?')">Ativar</button>
-                                <% } %>
+                                <form method="post" action="promocoesAdmin.jsp" style="display:inline;margin:0">
+                                    <input type="hidden" name="action" value="toggleAtivo"/>
+                                    <input type="hidden" name="promoId" value="<%= pid %>"/>
+                                    <button type="submit" class="<%= pativo ? "btn-inativar" : "btn-ativar" %>"
+                                            onclick="return confirm('<%= pativo ? "Inativar" : "Ativar" %> <%= ptitulo %>?')">
+                                        <%= pativo ? "Inativar" : "Ativar" %>
+                                    </button>
+                                </form>
                             </div>
                         </td>
                     </tr>
@@ -524,8 +650,7 @@
                 </div>
                 <% } %>
 
-                <%-- TODO: ligar ao AdminPromocoesServlet --%>
-                <form action="AdminPromocoesServlet" method="post">
+                <form action="promocoesAdmin.jsp" method="post">
                     <input type="hidden" name="action"   value="guardar"/>
                     <input type="hidden" id="hiddenId"   name="promoId" value="<%= selectedId %>"/>
                     <input type="hidden" id="hiddenAtivo" name="ativo"  value="<%= selAtivo %>"/>
@@ -583,14 +708,21 @@
 
                     <div class="edit-actions">
                         <button type="submit" class="btn-guardar">Guardar alterações</button>
-                        <%-- TODO: ligar a AdminPromocoesServlet?action=toggleEstado --%>
-                        <button type="button" id="btnToggle"
-                                class="btn-toggle-estado <%= selAtivo ? "" : "ativar" %>"
-                                onclick="return confirm('<%= selAtivo ? "Inativar" : "Ativar" %> promoção?')">
-                            <%= selAtivo ? "Inativar promoção" : "Ativar promoção" %>
-                        </button>
                     </div>
                 </form>
+                <% if (!selectedId.isEmpty()) { %>
+                <div style="padding: 0 16px 16px;">
+                    <form method="post" action="promocoesAdmin.jsp" style="margin:0"
+                          onsubmit="return confirm('<%= selAtivo ? "Inativar" : "Ativar" %> promoção?')">
+                        <input type="hidden" name="action" value="toggleAtivo"/>
+                        <input type="hidden" name="promoId" value="<%= selectedId %>"/>
+                        <button type="submit" id="btnToggle"
+                                class="btn-toggle-estado <%= selAtivo ? "" : "ativar" %>">
+                            <%= selAtivo ? "Inativar promoção" : "Ativar promoção" %>
+                        </button>
+                    </form>
+                </div>
+                <% } %>
             </div>
 
         </div>
@@ -608,8 +740,7 @@
                 int     pdesc    = (Integer) pr[2];
                 String  pinicio  = (String)  pr[3];
                 String  pfim     = (String)  pr[4];
-                String  pprodIds = (String)  pr[5];
-                boolean pativo   = (Boolean) pr[6];
+                boolean pativo   = (Boolean) pr[5];
                 if (!first) out.print(",");
                 first = false;
         %>
@@ -618,7 +749,7 @@
             desconto: <%= pdesc %>,
             inicio: '<%= pinicio %>',
             fim: '<%= pfim %>',
-            prods: '<%= pprodIds %>'.split(','),
+            prods: [],
             ativo: <%= pativo %>
         }
         <%

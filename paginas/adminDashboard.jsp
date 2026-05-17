@@ -1,32 +1,110 @@
 ﻿<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*" %>
+<%@ include file="basedados/basedados.h" %>
 <%
-    String adminName = "Administrador";
+    // Verificar sessao
+    HttpSession sess = request.getSession(false);
+    if (sess == null || sess.getAttribute("userId") == null) {
+        response.sendRedirect("login.jsp");
+        return;
+    }
+    if (!"administrador".equals(sess.getAttribute("userRole"))) {
+        response.sendRedirect("dashboard.jsp");
+        return;
+    }
 
-    int clientesRegistados = 24;
-    int clientesAtivos = 22;
-    int clientesInativos = 2;
+    String adminName = (String) sess.getAttribute("userName");
 
-    int encPendentes = 5;
+    int clientesRegistados = 0;
+    int clientesAtivos     = 0;
+    int clientesInativos   = 0;
+    int encPendentes       = 0;
+    int produtosAtivos     = 0;
+    int produtosSemStock   = 0;
+    String saldoLoja       = "0,00 €";
 
-    int produtosAtivos = 5;
-    int produtosSemStock = 0;
+    List<String[]> recentOrders = new ArrayList<>();
+    List<String[]> recentUsers  = new ArrayList<>();
 
-    String saldoLoja = "142,80 €";
+    try {
+        Connection conn = getConnection();
 
-    String[][] recentOrders = {
-            {"8", "Ana Silva",    "04/05/2026 15:10", "3,20 €", "Pendente"},
-            {"7", "João Costa",   "04/05/2026 14:32", "1,78 €", "Pendente"},
-            {"6", "Maria Santos", "04/05/2026 13:00", "6,50 €", "Confirmada"},
-            {"5", "Rui Faria",    "04/05/2026 11:45", "2,49 €", "Cancelada"},
-    };
+        // Clientes registados / ativos / inativos
+        PreparedStatement ps = conn.prepareStatement(
+            "SELECT COUNT(*) AS total FROM utilizadores WHERE perfil = 'cliente'");
+        ResultSet rs = ps.executeQuery();
+        if (rs.next()) clientesRegistados = rs.getInt("total");
+        rs.close(); ps.close();
 
-    String[][] recentUsers = {
-            {"Rui Faria",    "cliente", "Ativo"},
-            {"Maria Santos", "cliente", "Ativo"},
-            {"João Costa",   "cliente", "Ativo"},
-            {"Pedro Sousa",  "cliente", "Inativo"},
-    };
+        ps = conn.prepareStatement(
+            "SELECT COUNT(*) AS total FROM utilizadores WHERE perfil = 'cliente' AND ativo = 1");
+        rs = ps.executeQuery();
+        if (rs.next()) clientesAtivos = rs.getInt("total");
+        rs.close(); ps.close();
+        clientesInativos = clientesRegistados - clientesAtivos;
+
+        // Encomendas pendentes
+        ps = conn.prepareStatement(
+            "SELECT COUNT(*) AS total FROM encomenda WHERE estado = 'pendente'");
+        rs = ps.executeQuery();
+        if (rs.next()) encPendentes = rs.getInt("total");
+        rs.close(); ps.close();
+
+        // Produtos ativos e sem stock
+        ps = conn.prepareStatement(
+            "SELECT COUNT(*) AS total FROM produtos WHERE ativo = 1");
+        rs = ps.executeQuery();
+        if (rs.next()) produtosAtivos = rs.getInt("total");
+        rs.close(); ps.close();
+
+        ps = conn.prepareStatement(
+            "SELECT COUNT(*) AS total FROM produtos WHERE ativo = 1 AND stock = 0");
+        rs = ps.executeQuery();
+        if (rs.next()) produtosSemStock = rs.getInt("total");
+        rs.close(); ps.close();
+
+        // Saldo da loja (soma das encomendas confirmadas)
+        ps = conn.prepareStatement(
+            "SELECT COALESCE(SUM(total), 0) AS saldo FROM encomenda WHERE estado = 'confirmada'");
+        rs = ps.executeQuery();
+        if (rs.next()) saldoLoja = String.format("%.2f €", rs.getDouble("saldo")).replace(".", ",");
+        rs.close(); ps.close();
+
+        // Ultimas 5 encomendas
+        ps = conn.prepareStatement(
+            "SELECT e.id_encomenda, u.nome, e.data_encomenda, e.total, e.estado " +
+            "FROM encomenda e " +
+            "LEFT JOIN utilizadores u ON u.id_utilizador = e.id_utilizador " +
+            "ORDER BY e.data_encomenda DESC LIMIT 5");
+        rs = ps.executeQuery();
+        while (rs.next()) {
+            recentOrders.add(new String[]{
+                rs.getString("id_encomenda"),
+                rs.getString("nome"),
+                rs.getString("data_encomenda"),
+                String.format("%.2f €", rs.getDouble("total")).replace(".", ","),
+                rs.getString("estado")
+            });
+        }
+        rs.close(); ps.close();
+
+        // Ultimos 5 utilizadores registados
+        ps = conn.prepareStatement(
+            "SELECT nome, perfil, ativo FROM utilizadores ORDER BY id_utilizador DESC LIMIT 5");
+        rs = ps.executeQuery();
+        while (rs.next()) {
+            recentUsers.add(new String[]{
+                rs.getString("nome"),
+                rs.getString("perfil"),
+                rs.getBoolean("ativo") ? "Ativo" : "Inativo"
+            });
+        }
+        rs.close(); ps.close();
+
+        conn.close();
+    } catch (Exception e) {
+        // pagina renderiza com valores a zero em caso de erro de ligacao
+    }
 
     String activePage = "dashboard";
 %>

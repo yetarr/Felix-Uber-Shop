@@ -1,32 +1,77 @@
 ﻿<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
+<%@ page import="java.util.*" %>
+<%@ include file="basedados/basedados.h" %>
 <%
-    String adminName = "Administrador";
+    HttpSession sess = request.getSession(false);
+    if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
+    if (!"administrador".equals(sess.getAttribute("userRole"))) { response.sendRedirect("dashboard.jsp"); return; }
+    String adminName = (String) sess.getAttribute("userName");
     String activePage = "auditoria";
 
-    // Global stats (total events per category)
-    int statCarteira    = 6;
-    int statUtilizador  = 3;
-    int statProduto     = 4;
-    int statEncomenda   = 8;
-    int statPromocao    = 2;
+    int statCarteira   = 0;
+    int statUtilizador = 0;
+    int statProduto    = 0;
+    int statEncomenda  = 0;
+    int statPromocao   = 0;
+    List<String[]> logs = new ArrayList<>();
 
-    // Audit log: {data, categoria, acao, utilizador, detalhe, valor}
-    // valor: "" = dash, "-X,XX" = red, "+X,XX" = green, "X,XX" = neutral white
-    String[][] logs = {
-        {"04/05/2026 15:10", "Carteira",   "Pagamento encomenda",  "Ana Silva",         "Carteira cliente → FelixUberShop",         "-3,20 €"},
-        {"04/05/2026 14:00", "Utilizador", "Novo registo",         "admin",             "Criado utilizador: Rui Faria (cliente)",        ""},
-        {"04/05/2026 13:30", "Produto",    "Produto editado",      "admin",             "Arroz 1kg: preço 0,99€ → 0,89€", ""},
-        {"04/05/2026 13:00", "Encomenda",  "Encomenda confirmada", "Funcionário Teste", "Encomenda #6 — Maria Santos",         "6,50 €"},
-        {"04/05/2026 11:45", "Encomenda",  "Encomenda cancelada",  "Rui Faria",         "Encomenda #5 — devolução de saldo", "+2,49 €"},
-        {"03/05/2026 10:00", "Promoção", "Promoção criada", "admin", "Promoção de Primavera — 10% desconto", ""},
-        {"03/05/2026 09:00", "Utilizador", "Utilizador inativado", "admin",             "Conta de Pedro Sousa desativada",              ""},
-        {"01/05/2026 08:00", "Carteira",   "Depósito",        "João Costa",   "Carteira cliente",                             "+50,00 €"},
-    };
+    Connection _conn8 = null;
+    PreparedStatement _ps8 = null;
+    ResultSet _rs8 = null;
+    try {
+        _conn8 = getConnection();
 
-    String filterCat   = request.getParameter("categoria") != null ? request.getParameter("categoria") : "";
-    String filterDe    = request.getParameter("de")        != null ? request.getParameter("de")        : "2026-05-01";
-    String filterAte   = request.getParameter("ate")       != null ? request.getParameter("ate")       : "2026-05-04";
-    String sortBy      = request.getParameter("sort")      != null ? request.getParameter("sort")      : "data";
+        // Stats
+        _ps8 = _conn8.prepareStatement("SELECT COUNT(*) FROM auditoria_carteira");
+        _rs8 = _ps8.executeQuery();
+        if (_rs8.next()) statCarteira = _rs8.getInt(1);
+        closeAll(_rs8, _ps8, null);
+
+        _ps8 = _conn8.prepareStatement("SELECT COUNT(*) FROM encomenda");
+        _rs8 = _ps8.executeQuery();
+        if (_rs8.next()) statEncomenda = _rs8.getInt(1);
+        closeAll(_rs8, _ps8, null);
+
+        _ps8 = _conn8.prepareStatement("SELECT COUNT(*) FROM promocoes");
+        _rs8 = _ps8.executeQuery();
+        if (_rs8.next()) statPromocao = _rs8.getInt(1);
+        closeAll(_rs8, _ps8, null);
+
+        // Audit log — all wallet movements
+        _ps8 = _conn8.prepareStatement(
+            "SELECT ac.data_operacao, 'Carteira' as categoria, ac.tipo_operacao as acao, " +
+            "u.nome as utilizador, COALESCE(ac.descricao,'') as detalhe, " +
+            "ac.valor " +
+            "FROM auditoria_carteira ac " +
+            "JOIN carteira c ON c.id_carteira = ac.id_carteira_origem OR c.id_carteira = ac.id_carteira_destino " +
+            "JOIN utilizadores u ON u.id_utilizador = c.id_utilizador AND c.is_loja = 0 " +
+            "ORDER BY ac.data_operacao DESC LIMIT 50");
+        _rs8 = _ps8.executeQuery();
+        while (_rs8.next()) {
+            String tipo = _rs8.getString("acao");
+            double valor = _rs8.getDouble("valor");
+            boolean isDebit = "pagamento".equals(tipo) || "levantamento".equals(tipo);
+            String sign = isDebit ? "-" : "+";
+            String valorFmt = sign + String.format("%,.2f €", valor).replace(".", ",");
+            logs.add(new String[]{
+                String.valueOf(_rs8.getTimestamp("data_operacao")),
+                "Carteira",
+                tipo,
+                _rs8.getString("utilizador") != null ? _rs8.getString("utilizador") : "",
+                _rs8.getString("detalhe"),
+                valorFmt
+            });
+        }
+    } catch (Exception _e8) {
+        // page renders with empty/zero data on error
+    } finally {
+        closeAll(_rs8, _ps8, _conn8);
+    }
+
+    String filterCat = request.getParameter("categoria") != null ? request.getParameter("categoria") : "";
+    String filterDe  = request.getParameter("de")        != null ? request.getParameter("de")        : "";
+    String filterAte = request.getParameter("ate")       != null ? request.getParameter("ate")       : "";
+    String sortBy    = request.getParameter("sort")      != null ? request.getParameter("sort")      : "data";
 %>
 <!DOCTYPE html>
 <html lang="pt">

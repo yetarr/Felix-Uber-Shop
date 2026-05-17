@@ -1,20 +1,107 @@
 ﻿<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
+<%@ page import="java.sql.*, java.security.MessageDigest, java.nio.charset.StandardCharsets" %>
+<%@ include file="basedados/basedados.h" %>
+<%!
+    private String hashPassword(String plain) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] h = md.digest(plain.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : h) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) { throw new RuntimeException(e); }
+    }
+%>
 <%
-    String adminName  = "Administrador";
-    String adminEmail = "admin@felixubershop.pt";
-    String adminTel   = "910 000 000";
+    HttpSession sess = request.getSession(false);
+    if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
+    if (!"administrador".equals(sess.getAttribute("userRole"))) { response.sendRedirect("dashboard.jsp"); return; }
+
+    String adminName  = (String) sess.getAttribute("userName");
+    if (adminName == null) adminName = "Administrador";
+    String adminEmail = "";
+    String adminTel   = "";
     String activePage = "perfil";
 
-    // Resumo da conta
-    int    utilizadoresGeridos = 24;
-    int    produtosGeridos     = 5;
-    String membroDesde         = "01/01/2026";
+    String successMsg = (String) sess.getAttribute("success");
+    if (successMsg != null) sess.removeAttribute("success");
+    String errorMsg = null;
 
-    // Segurança
-    String ultimoLogin = "04/05/2026 09:00";
+    if ("POST".equalsIgnoreCase(request.getMethod())) {
+        String postAction = request.getParameter("action");
+        if ("guardar".equals(postAction)) {
+            String nome = request.getParameter("nome");
+            String email = request.getParameter("email");
+            String telefone = request.getParameter("telefone");
+            String pwNova = request.getParameter("password");
+            String pwConf = request.getParameter("passwordConfirm");
+            if (nome == null || nome.isBlank() || email == null || email.isBlank()) {
+                errorMsg = "Nome e email são obrigatórios.";
+            } else if (pwNova != null && !pwNova.isBlank() && !pwNova.equals(pwConf)) {
+                errorMsg = "As passwords não coincidem.";
+            } else {
+                try {
+                    Connection conn = getConnection();
+                    if (pwNova != null && !pwNova.isBlank()) {
+                        PreparedStatement ps = conn.prepareStatement(
+                            "UPDATE utilizadores SET nome=?, email=?, telefone=?, password_hash=? WHERE id_utilizador=?");
+                        ps.setString(1, nome.trim()); ps.setString(2, email.trim());
+                        ps.setString(3, telefone != null ? telefone.trim() : null);
+                        ps.setString(4, hashPassword(pwNova));
+                        ps.setInt(5, (Integer) sess.getAttribute("userId"));
+                        ps.executeUpdate(); closeAll(null, ps, conn);
+                    } else {
+                        PreparedStatement ps = conn.prepareStatement(
+                            "UPDATE utilizadores SET nome=?, email=?, telefone=? WHERE id_utilizador=?");
+                        ps.setString(1, nome.trim()); ps.setString(2, email.trim());
+                        ps.setString(3, telefone != null ? telefone.trim() : null);
+                        ps.setInt(4, (Integer) sess.getAttribute("userId"));
+                        ps.executeUpdate(); closeAll(null, ps, conn);
+                    }
+                    sess.setAttribute("userName", nome.trim());
+                    sess.setAttribute("success", "Perfil guardado com sucesso.");
+                    response.sendRedirect("perfilAdmin.jsp"); return;
+                } catch (Exception e) { errorMsg = "Erro ao guardar: " + e.getMessage(); }
+            }
+        }
+    }
 
-    String successMsg = (String) request.getAttribute("success");
-    String errorMsg   = (String) request.getAttribute("error");
+    int    utilizadoresGeridos = 0;
+    int    produtosGeridos     = 0;
+    String membroDesde         = "";
+
+    try {
+        Connection conn = getConnection();
+
+        PreparedStatement ps = conn.prepareStatement(
+            "SELECT nome, email, telefone, data_registo FROM utilizadores WHERE id_utilizador = ?");
+        ps.setInt(1, (Integer) sess.getAttribute("userId"));
+        ResultSet rs = ps.executeQuery();
+        if (rs.next()) {
+            adminName  = rs.getString("nome");
+            adminEmail = rs.getString("email");
+            adminTel   = rs.getString("telefone") != null ? rs.getString("telefone") : "";
+            String dr  = rs.getString("data_registo");
+            membroDesde = (dr != null && dr.length() >= 10) ? dr.substring(0, 10) : (dr != null ? dr : "");
+        }
+        rs.close(); ps.close();
+
+        PreparedStatement ps2 = conn.prepareStatement(
+            "SELECT COUNT(*) FROM utilizadores WHERE perfil != 'administrador'");
+        ResultSet rs2 = ps2.executeQuery();
+        if (rs2.next()) utilizadoresGeridos = rs2.getInt(1);
+        rs2.close(); ps2.close();
+
+        PreparedStatement ps3 = conn.prepareStatement(
+            "SELECT COUNT(*) FROM produtos WHERE ativo = 1");
+        ResultSet rs3 = ps3.executeQuery();
+        if (rs3.next()) produtosGeridos = rs3.getInt(1);
+        rs3.close(); ps3.close();
+
+        conn.close();
+    } catch (Exception e) {
+        // page renders with defaults on error
+    }
 %>
 <!DOCTYPE html>
 <html lang="pt">
@@ -316,8 +403,7 @@
                 </div>
                 <% } %>
 
-                <%-- TODO: ligar ao AdminPerfilServlet --%>
-                <form action="AdminPerfilServlet" method="post" onsubmit="return validarForm()">
+                <form action="perfilAdmin.jsp" method="post" onsubmit="return validarForm()">
                     <input type="hidden" name="action" value="guardar"/>
 
                     <div class="field-group" style="margin-bottom:14px;">
@@ -394,7 +480,7 @@
                         </div>
                         <div class="info-row">
                             <span class="info-label">Último login</span>
-                            <span class="info-value"><%= ultimoLogin %></span>
+                            <span class="info-value">—</span>
                         </div>
                     </div>
                 </div>
