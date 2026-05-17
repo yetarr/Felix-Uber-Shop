@@ -44,6 +44,7 @@ CREATE TABLE produtos
     nome       VARCHAR(150)   NOT NULL,
     descricao  TEXT,
     preco      DECIMAL(10, 2) NOT NULL,
+    imagem     VARCHAR(255)   DEFAULT          'default.png',
     stock      INT            NOT NULL DEFAULT 0,
     categoria  VARCHAR(80),
     ativo      TINYINT(1)     NOT NULL DEFAULT 1,
@@ -148,18 +149,20 @@ CREATE TABLE auditoria_carteira
   COMMENT='Auditoria de todas as operações de carteira (imutável)';
 
 INSERT INTO utilizadores (nome, email, password_hash, perfil, ativo)
-VALUES ('FelixUberShop', 'sistema@felixubershop.pt', MD5('sistema_loja_2025'), 'administrador', 0);
+VALUES ('FelixUberShop', 'sistema@felixubershop.pt', "70502ff6bb85356055ea52ff0a657afd09a52324a33734ccfb7bdedf05634925", 'administrador', 0);
 
 INSERT INTO carteira (id_utilizador, saldo, is_loja)
 VALUES (LAST_INSERT_ID(), 0.00, 1);
 
 INSERT INTO utilizadores (nome, email, password_hash, perfil, telefone, morada)
-VALUES ('Cliente Teste', 'cliente@felixubershop.pt', MD5('cliente'), 'cliente', '912 345 678',
+VALUES ('Cliente Teste', 'cliente@felixubershop.pt', "a60b85d409a01d46023f90741e01b79543a3cb1ba048eaefbe5d7a63638043bf", 'cliente', '912 345 678',
         'Rua das Flores 1, Castelo Branco'),
-       ('Funcionário Teste', 'funcionario@felixubershop.pt', MD5('funcionario'), 'funcionario', '923 456 789',
+       ('Funcionário Teste', 'funcionario@felixubershop.pt', "24d96a103e8552cb162117e5b94b1ead596b9c0a94f73bc47f7d244d279cacf2", 'funcionario', '923 456 789',
         'Av. Principal 10, Castelo Branco'),
-       ('Administrador', 'admin@felixubershop.pt', MD5('admin'), 'administrador', '934 567 890',
+       ('Administrador', 'admin@felixubershop.pt', "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918", 'administrador', '934 567 890',
         'Praça Central 5, Castelo Branco');
+
+-- Criar carteiras iniciais para os utilizadores de teste
 INSERT INTO carteira (id_utilizador, saldo, is_loja)
 SELECT id_utilizador, 50.00, 0
 FROM utilizadores
