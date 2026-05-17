@@ -122,10 +122,9 @@
             int saldoCents = (int)(saldo * 100);
             boolean ativo  = rs.getInt("ativo") == 1;
             String perfil  = rs.getString("perfil");
-            // Capitalise first letter for display
-            String perfilDisplay = (perfil != null && !perfil.isEmpty())
-                ? Character.toUpperCase(perfil.charAt(0)) + perfil.substring(1).toLowerCase()
-                : "";
+            String perfilDisplay = "Cliente";
+            if ("funcionario".equalsIgnoreCase(perfil))     perfilDisplay = "Funcionário";
+            else if ("administrador".equalsIgnoreCase(perfil)) perfilDisplay = "Admin";
             users.add(new Object[]{
                 String.valueOf(rs.getInt("id_utilizador")),
                 rs.getString("nome"),

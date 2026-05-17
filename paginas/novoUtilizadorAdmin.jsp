@@ -53,7 +53,8 @@
                 else {
                     rs.close(); ps.close();
                     ps = conn.prepareStatement(
-                        "INSERT INTO utilizadores (nome, email, telefone, password_hash, perfil) VALUES (?,?,?,?,?)");
+                        "INSERT INTO utilizadores (nome, email, telefone, password_hash, perfil) VALUES (?,?,?,?,?)",
+                        java.sql.Statement.RETURN_GENERATED_KEYS);
                     ps.setString(1, nome.trim()); ps.setString(2, email.trim());
                     ps.setString(3, telefone != null ? telefone.trim() : null);
                     ps.setString(4, hashPassword(pw)); ps.setString(5, perfil);
