@@ -15,7 +15,9 @@
     String orderStatus  = "pendente";
     String saldoCliente = "0,00";
     List<Object[]> catalogue = new ArrayList<>();
+    List<String[]> clientes  = new ArrayList<>();
 
+    int clientUserId = 0;
     Connection _conn6 = null;
     PreparedStatement _ps6 = null;
     ResultSet _rs6 = null;
@@ -26,7 +28,6 @@
             try { orderIdInt = Integer.parseInt(orderId); } catch (Exception _ex6) {}
         }
 
-        int clientUserId = 0;
         if (!isNova && orderIdInt > 0) {
             // Order details + client
             _ps6 = _conn6.prepareStatement(
@@ -75,6 +76,20 @@
                 (int) _rs6.getLong("preco_orig")
             });
         }
+        closeAll(_rs6, _ps6, null);
+
+        // Load clients for nova encomenda dropdown
+        if (isNova) {
+            _ps6 = _conn6.prepareStatement(
+                "SELECT id_utilizador, nome FROM utilizadores WHERE perfil='cliente' ORDER BY nome");
+            _rs6 = _ps6.executeQuery();
+            while (_rs6.next()) {
+                clientes.add(new String[]{
+                    String.valueOf(_rs6.getInt("id_utilizador")),
+                    _rs6.getString("nome")
+                });
+            }
+        }
     } catch (Exception _e6) {
         // page renders with empty data on error
     } finally {
@@ -98,7 +113,7 @@
             if (orderIdStr == null || orderIdStr.isEmpty()) {
                 // Create new order
                 int cid = Integer.parseInt(clienteIdStr);
-                String codigoUnico = "FUS-" + System.currentTimeMillis();
+                String codigoUnico = "FUS-" + new java.util.Date().getTime();
                 ps = conn.prepareStatement(
                     "INSERT INTO encomenda (codigo_unico, id_utilizador, estado, total) VALUES (?, ?, 'pendente', 0)",
                     java.sql.Statement.RETURN_GENERATED_KEYS);
@@ -997,6 +1012,7 @@
                             String priceStr = String.format("%d,%02d €", price / 100, price % 100);
                             String origStr  = String.format("%d,%02d €", origPrice / 100, origPrice % 100);
                             String fullName = pname + (!pqlbl.isEmpty() ? " " + pqlbl : "");
+                            String safeName = fullName.replace("'", "\\'");
                     %>
                     <div class="product-card <%= curQty > 0 ? "has-qty" : "" %>" id="card-<%= pid %>">
                         <% if (disc > 0) { %><span class="disc-badge">-<%= disc %>%</span><% } %>
@@ -1014,9 +1030,9 @@
                         <div class="product-price-orig"><%= origStr %></div>
                         <% } %>
                         <div class="stepper">
-                            <button type="button" onclick="changeQty('<%= pid %>',-1,<%= price %>,'<%= fullName %>')">&#8722;</button>
+                            <button type="button" onclick="changeQty('<%= pid %>',-1,<%= price %>,'<%= safeName %>')">&#8722;</button>
                             <span class="qty-val" id="qty-<%= pid %>"><%= curQty %></span>
-                            <button type="button" onclick="changeQty('<%= pid %>',1,<%= price %>,'<%= fullName %>')">&#43;</button>
+                            <button type="button" onclick="changeQty('<%= pid %>',1,<%= price %>,'<%= safeName %>')">&#43;</button>
                         </div>
                     </div>
                     <% } %>
@@ -1031,6 +1047,18 @@
                     <div class="summary-header">
                         <div class="summary-title">Resumo</div>
                     </div>
+
+                    <% if (isNova) { %>
+                    <div style="padding:10px 16px;border-bottom:1px solid #2e2e2e;">
+                        <div style="font-size:.76rem;color:#777;margin-bottom:5px;">Cliente</div>
+                        <select id="clienteSelect" style="width:100%;background:#1e1e1e;border:1px solid #3a3a3a;border-radius:7px;color:#ddd;font-size:.85rem;padding:8px 10px;outline:none;">
+                            <option value="">Selecionar cliente...</option>
+                            <% for (String[] c : clientes) { %>
+                            <option value="<%= c[0] %>"><%= c[1] %></option>
+                            <% } %>
+                        </select>
+                    </div>
+                    <% } %>
 
                     <div class="saldo-row">
                         <span>Saldo do cliente</span>
@@ -1064,7 +1092,7 @@
                             <% if (orderId != null) { %>
                             <input type="hidden" name="orderId" value="<%= orderId %>"/>
                             <% } %>
-                            <input type="hidden" name="clienteId" value="<%= clientUserId %>"/>
+                            <input type="hidden" name="clienteId" id="clienteIdHidden" value="<%= clientUserId %>"/>
                             <input type="hidden" id="estadoHidden" name="estado" value="<%= orderStatus %>"/>
                             <div id="hiddenInputs"></div>
                             <button type="submit" class="btn-confirmar" id="btnConfirmar">
@@ -1125,8 +1153,9 @@
            String ql  = (String)  p[2];
            int price  = (Integer) p[3];
            int curQty = (Integer) p[5];
+           String sn  = (pn + (!ql.isEmpty() ? " "+ql : "")).replace("'", "\\'");
            if (curQty > 0) { %>
-    cart['<%= pid %>'] = {name: '<%= pn + (!ql.isEmpty() ? " "+ql : "") %>', price: <%= price %>, qty: <%= curQty %>};
+    cart['<%= pid %>'] = {name: '<%= sn %>', price: <%= price %>, qty: <%= curQty %>};
     <% }} %>
 
     function fmt(cents) {
@@ -1165,17 +1194,16 @@
         items.forEach(([, item]) => {
             const sub = item.price * item.qty;
             total += sub;
-            html += `<div class="order-item">
-                <span><span class="iname">${item.name}</span><span class="iqty">× ${item.qty}</span></span>
-                <span class="iprice">${fmt(sub)}</span>
-            </div>`;
+            html += '<div class="order-item">' +
+                    '<span><span class="iname">' + item.name + '</span><span class="iqty">× ' + item.qty + '</span></span>' +
+                    '<span class="iprice">' + fmt(sub) + '</span>' +
+                    '</div>';
         });
         box.innerHTML = html;
         document.getElementById('totalValue').textContent = fmt(total);
 
-        const insuf = total > Math.round(saldo * 100);
-        document.getElementById('saldoWarn').style.display = insuf ? 'block' : 'none';
-        document.getElementById('btnConfirmar').disabled = insuf;
+        document.getElementById('saldoWarn').style.display = 'none';
+        document.getElementById('btnConfirmar').disabled = false;
     }
 
     const estadoSelectEl = document.getElementById('estadoSelect');
@@ -1185,13 +1213,24 @@
         });
     }
 
+    const clienteSelectEl = document.getElementById('clienteSelect');
+    if (clienteSelectEl) {
+        clienteSelectEl.addEventListener('change', function () {
+            document.getElementById('clienteIdHidden').value = this.value;
+        });
+    }
+
     function prepareSubmit() {
+        if (clienteSelectEl && !clienteSelectEl.value) {
+            alert('Seleciona um cliente antes de confirmar.');
+            return false;
+        }
         const hi      = document.getElementById('hiddenInputs');
         const entries = Object.entries(cart);
         if (!entries.length) return false;
         hi.innerHTML  = '';
         entries.forEach(([pid, item]) => {
-            hi.innerHTML += `<input type="hidden" name="produto_${pid}" value="${item.qty}"/>`;
+            hi.innerHTML += '<input type="hidden" name="produto_' + pid + '" value="' + item.qty + '"/>';
         });
         return true;
     }
