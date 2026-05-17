@@ -1,15 +1,58 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*" %>
+<%@ include file="../basedados/basedados.h" %>
 <%
+    // Obter os produtos ativos com as promocoes da base de dados
+    String sqlGetOrders =
+            "SELECT p.*, pp.desconto_percentagem, pp.data_inicio, pp.data_fim " +
+                    "FROM produtos p " +
+                    "LEFT JOIN promocao_produto pr ON pr.id_produto = p.id_produto " +
+                    "LEFT JOIN promocoes pp ON pp.id_promocao = pr.id_promocao " +
+                    "WHERE p.ativo = 1;";
+    Connection con = getConnection();
+    PreparedStatement ps = con.prepareStatement(sqlGetOrders);
+    ResultSet rs = ps.executeQuery();
 
-    String[][] products = {
-            {"Água", "1.5L", "0,49€", "0", "0,49€"},
-            {"Arroz", "1kg", "0,89€", "10", "0,79€"},
-            {"Azeite", "750ml", "12,99€", "0", "12,99€"},
-            {"Leite", "1L", "0,89€", "0", "0,89€"},
-            {"Pão de forma", "", "1,59€", "6", "0,99€"},
-    };
+    // Adicionar todos os produtos a uma lista
+    List<String[]> products = new ArrayList<>();
 
+    while(rs.next())
+    {
+        String id = (rs.getString("id_produto"));
+        String nome = (rs.getString("nome"));
+        String descricao = (rs.getString("descricao"));
+        String preco = (rs.getString("preco"));
+        String stock = (rs.getString("stock"));
+        String categoria = (rs.getString("categoria"));
+        String desconto = rs.getString("desconto_percentagem");
+        String precoDescontado = preco;
+
+        // verificacao da existecia de uma promocao
+        if (desconto != null) {
+            double price = Double.parseDouble(preco);
+            double discount = Double.parseDouble(desconto);
+
+            double discounted = price - (price * discount / 100.0);
+            precoDescontado = String.format("%.2f", discounted);
+        } else {
+            desconto = "0";
+        }
+
+        String[] product = {
+                id,
+                nome,
+                descricao,
+                preco,
+                stock,
+                categoria,
+                desconto,
+                precoDescontado
+        };
+
+        products.add(product);
+    }
+
+    // horario
     String[][] hours = {
             {"Segunda a sexta", "08h00 – 20h00"},
             {"Sábado", "09h00 – 18h00"},
@@ -327,8 +370,6 @@
     </style>
 </head>
 <body>
-
-<!-- NAV -->
 <nav>
     <a href="index.jsp" class="nav-brand">FelixUberShop</a>
     <div class="nav-links">
@@ -337,10 +378,8 @@
     </div>
 </nav>
 
-<!-- MAIN GRID -->
 <main>
 
-    <!-- ── LEFT: PRODUCTS ─────────────────────────────── -->
     <section class="products-section">
         <h2 class="section-title">
             <svg viewBox="0 0 24 24">
@@ -351,40 +390,40 @@
 
         <div class="product-list">
             <%
+                // Apresenttar produtos
                 for (String[] p : products) {
-                    String name = p[0];
-                    String qty = p[1];
-                    String origPrice = p[2];
-                    int disc = Integer.parseInt(p[3]);
-                    String finalPrice = p[4];
-                    boolean hasDisc = disc > 0;
+                    String name = p[1];
+                    String quantity = p[4];
+                    String originalPrice = p[3];
+                    double discount = Double.parseDouble(p[6]);
+                    String finalPrice = p[7];
+                    boolean hasDiscount = discount > 0;
             %>
             <div class="product-card">
 
-                <!-- Thumbnail placeholder -->
                 <div class="product-img">
                     <svg viewBox="0 0 24 24">
                         <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l7.59-7.59L21 8l-9 9z"/>
                     </svg>
                 </div>
 
-                <!-- Info -->
+                <!-- Informacao do produto -->
                 <div class="product-info">
                     <div class="product-name"><%= name %>
                     </div>
-                    <% if (!qty.isEmpty()) { %>
-                    <div class="product-qty"><%= qty %>
+                    <% if (!quantity.isEmpty()) { %>
+                    <div class="product-qty">qtd: <%= quantity %>
                     </div>
                     <% } %>
                 </div>
 
-                <!-- Price -->
+                <!-- Informacao do preco do produto -->
                 <div class="product-price">
-                    <% if (hasDisc) { %>
-                    <span class="discount-badge">-<%= disc %>%</span>
-                    <span class="price-original"><%= origPrice %></span>
+                    <% if (hasDiscount) { %>
+                    <span class="discount-badge">-<%= discount %>%</span>
+                    <span class="price-original"><%= originalPrice %>€</span>
                     <% } %>
-                    <span class="price-final"><%= finalPrice %></span>
+                    <span class="price-final"><%= finalPrice %>€</span>
                 </div>
 
             </div>
@@ -392,10 +431,8 @@
         </div>
     </section>
 
-    <!-- ── RIGHT: STORE INFO ───────────────────────────── -->
     <aside class="right-col">
 
-        <!-- Hours -->
         <div class="info-card">
             <h3 class="section-title">
                 <svg viewBox="0 0 24 24">
@@ -403,6 +440,7 @@
                 </svg>
                 Horários
             </h3>
+            <!-- Tabela de horarios -->
             <table class="hours-table">
                 <%
                     for (String[] h : hours) {
@@ -418,7 +456,6 @@
             </table>
         </div>
 
-        <!-- Contacts -->
         <div class="info-card">
             <h3 class="section-title">
                 <svg viewBox="0 0 24 24">
@@ -428,13 +465,12 @@
             </h3>
             <ul class="contact-list">
                 <li>
-                    <!-- map pin -->
                     <svg class="ci" viewBox="0 0 24 24">
                         <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/>
                     </svg>
                     <div>
                         <span class="label">Morada</span>
-                        <span class="value">Rua Fictícia, 13</span>
+                        <span class="value">Rua Fictícia, 06</span>
                     </div>
                 </li>
                 <li>
@@ -447,7 +483,6 @@
                     </div>
                 </li>
                 <li>
-                    <!-- phone -->
                     <svg class="ci" viewBox="0 0 24 24">
                         <path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1C10.28 21 3 13.72 3 4.5c0-.55.45-1 1-1H7c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.24 1.02l-2.2 2.2z"/>
                     </svg>
@@ -458,7 +493,6 @@
                     </div>
                 </li>
                 <li>
-                    <!-- email -->
                     <svg class="ci" viewBox="0 0 24 24">
                         <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/>
                     </svg>
