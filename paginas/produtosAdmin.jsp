@@ -622,7 +622,6 @@
             color: #f08080;
         }
 
-        /* Photo area — TODO: implementar upload de imagem */
         .photo-area {
             margin: 14px 16px;
             height: 110px;
@@ -635,11 +634,14 @@
             justify-content: center;
             gap: 6px;
             cursor: pointer;
-            transition: border-color .2s;
+            transition: border-color .2s, background .2s;
+            position: relative;
+            overflow: hidden;
         }
 
         .photo-area:hover {
             border-color: #555;
+            background: #222;
         }
 
         .photo-area svg {
@@ -651,6 +653,22 @@
         .photo-area span {
             font-size: .76rem;
             color: #555;
+        }
+
+        .photo-area input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        #editPhotoPreviewImg {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+            position: absolute;
+            inset: 0;
         }
 
         /* Form fields */
@@ -1002,10 +1020,11 @@
                     </div>
                     <% } else { %>
 
-                    <!-- Photo area — TODO: implementar upload de imagem do produto -->
-                    <div class="photo-area" onclick="alert('TODO: upload de imagem')">
-                        <svg viewBox="0 0 24 24"><path d="M12 15.2A3.2 3.2 0 1 1 12 8.8a3.2 3.2 0 0 1 0 6.4zm0-8.2a5 5 0 1 0 0 10A5 5 0 0 0 12 7zM4 5h2.17L7.4 3.6A1 1 0 0 1 8.26 3h7.48a1 1 0 0 1 .86.6L17.83 5H20a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></svg>
-                        <span>Clica para adicionar foto</span>
+                    <div class="photo-area" id="editPhotoUpload">
+                        <img id="editPhotoPreviewImg" src="" alt="preview"/>
+                        <svg viewBox="0 0 24 24" id="editPhotoIcon"><path d="M12 15.2A3.2 3.2 0 1 1 12 8.8a3.2 3.2 0 0 1 0 6.4zm0-8.2a5 5 0 1 0 0 10A5 5 0 0 0 12 7zM4 5h2.17L7.4 3.6A1 1 0 0 1 8.26 3h7.48a1 1 0 0 1 .86.6L17.83 5H20a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></svg>
+                        <span id="editPhotoLabel">Clica para adicionar foto</span>
+                        <input type="file" id="editFotoFile" accept="image/*" onchange="previewEditPhoto(this)"/>
                     </div>
 
                     <form action="produtosAdmin.jsp" method="post"
@@ -1127,6 +1146,19 @@
         if (btn) btn.style.display = 'none';
 
         document.querySelectorAll('.products-table tbody tr').forEach(row => row.classList.remove('selected'));
+    }
+
+    function previewEditPhoto(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const url = URL.createObjectURL(file);
+        const img   = document.getElementById('editPhotoPreviewImg');
+        const icon  = document.getElementById('editPhotoIcon');
+        const label = document.getElementById('editPhotoLabel');
+        img.src = url;
+        img.style.display   = 'block';
+        icon.style.display  = 'none';
+        label.style.display = 'none';
     }
 
     function filterTable() {

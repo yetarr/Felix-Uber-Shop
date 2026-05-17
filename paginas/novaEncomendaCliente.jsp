@@ -32,9 +32,9 @@
             rs.close(); ps.close();
 
 
-            String codigoUnico = "FUS-" + System.currentTimeMillis();
+            String codigoUnico = "FUS-" + new java.util.Date().getTime();
             String sql = "INSERT INTO encomenda (codigo_unico, id_utilizador, estado, total) VALUES (?, ?, 'pendente', 0)";
-            ps = conn.prepareStatement(sql);
+            ps = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS);
             ps.setString(1, codigoUnico);
             ps.setInt(2, userId);
             ps.executeUpdate();
@@ -71,7 +71,7 @@
                         rs = ps.executeQuery();
                         if (!rs.next()) { closeAll(rs, ps, null); continue; }
                         double preco = rs.getDouble("preco");
-                        double desc = rs.getDouble("desc_pct");
+                        double desc = rs.getDouble("desconto_percentagem");
                         double precoFinal = Math.round(preco * (100.0 - desc)) / 100.0;
                         closeAll(rs, ps, null);
 
