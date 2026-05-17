@@ -43,4 +43,23 @@
         closeStatement(ps);
         closeConnection(con);
     }
+
+    public void logAuditoria(String categoria, String acao, String descricao, Integer idRef, Integer idUser) {
+        Connection _lc = null;
+        PreparedStatement _lps = null;
+        try {
+            _lc = getConnection();
+            _lps = _lc.prepareStatement(
+                "INSERT INTO auditoria (categoria, acao, descricao, id_referencia, id_utilizador) VALUES (?,?,?,?,?)");
+            _lps.setString(1, categoria);
+            _lps.setString(2, acao);
+            _lps.setString(3, descricao);
+            if (idRef  != null) _lps.setInt(4, idRef);  else _lps.setNull(4, java.sql.Types.INTEGER);
+            if (idUser != null) _lps.setInt(5, idUser); else _lps.setNull(5, java.sql.Types.INTEGER);
+            _lps.executeUpdate();
+        } catch (Exception _le) {
+        } finally {
+            closeAll(null, _lps, _lc);
+        }
+    }
 %>

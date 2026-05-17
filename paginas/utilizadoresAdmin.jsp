@@ -61,6 +61,7 @@
                                 ps.setInt(1, newId); ps.executeUpdate(); ps.close();
                             }
                             conn.close();
+                            logAuditoria("Utilizador", "criado", "Utilizador criado: " + nome.trim() + " (" + perfil + ")", newId > 0 ? newId : null, (Integer) sess.getAttribute("userId"));
                             sess.setAttribute("success", "Utilizador criado com sucesso.");
                             response.sendRedirect("utilizadoresAdmin.jsp?userId=" + newId); return;
                         }
@@ -81,6 +82,7 @@
                             ps.setString(4, perfil); ps.setInt(5, ativo ? 1 : 0); ps.setInt(6, Integer.parseInt(userId));
                             ps.executeUpdate(); closeAll(null, ps, conn);
                         }
+                        logAuditoria("Utilizador", "editado", "Utilizador editado: " + nome.trim() + " (id:" + userId + ")", Integer.parseInt(userId), (Integer) sess.getAttribute("userId"));
                         sess.setAttribute("success", "Utilizador atualizado.");
                         response.sendRedirect("utilizadoresAdmin.jsp?userId=" + userId); return;
                     }
@@ -92,6 +94,7 @@
                 Connection conn = getConnection();
                 PreparedStatement ps = conn.prepareStatement("UPDATE utilizadores SET ativo = 1 - ativo WHERE id_utilizador = ?");
                 ps.setInt(1, Integer.parseInt(uid)); ps.executeUpdate(); closeAll(null, ps, conn);
+                logAuditoria("Utilizador", "ativo alterado", "Estado do utilizador alterado (id:" + uid + ")", Integer.parseInt(uid), (Integer) sess.getAttribute("userId"));
                 sess.setAttribute("success", "Estado do utilizador alterado.");
                 response.sendRedirect("utilizadoresAdmin.jsp?userId=" + uid); return;
             } catch (Exception e) { errorMsg = "Erro: " + e.getMessage(); }

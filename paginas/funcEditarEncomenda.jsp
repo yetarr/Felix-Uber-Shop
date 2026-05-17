@@ -21,6 +21,7 @@
                 _vps.setInt(1, Integer.parseInt(_eid));
                 int rows = _vps.executeUpdate();
                 closeAll(null, _vps, _vc);
+                if (rows > 0) logAuditoria("Encomenda", "validada", "Encomenda #" + _eid + " validada (pronto)", Integer.parseInt(_eid), (Integer) session.getAttribute("userId"));
                 session.setAttribute("success", rows > 0 ? "Encomenda #" + _eid + " validada com sucesso." : "Encomenda não encontrada ou já validada.");
             } catch (Exception _ve) {
                 session.setAttribute("errorMsg", "Erro: " + _ve.getMessage());
@@ -34,6 +35,7 @@
                 _vps.setInt(1, Integer.parseInt(_eid));
                 int rows = _vps.executeUpdate();
                 closeAll(null, _vps, _vc);
+                if (rows > 0) logAuditoria("Encomenda", "cancelada", "Encomenda #" + _eid + " cancelada pelo funcionário", Integer.parseInt(_eid), (Integer) session.getAttribute("userId"));
                 session.setAttribute("success", rows > 0 ? "Encomenda #" + _eid + " cancelada." : "Encomenda não encontrada ou já cancelada.");
             } catch (Exception _ve) {
                 session.setAttribute("errorMsg", "Erro: " + _ve.getMessage());

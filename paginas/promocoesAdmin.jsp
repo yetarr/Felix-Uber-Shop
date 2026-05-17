@@ -69,6 +69,8 @@
                         ps.close();
                     }
                     conn.close();
+                    String _pAcao = (promoId == null || promoId.isBlank()) ? "criada" : "editada";
+                    logAuditoria("Promoção", _pAcao, "Promoção " + _pAcao + ": " + titulo.trim(), savedId, (Integer) sess.getAttribute("userId"));
                     sess.setAttribute("success", "Promoção guardada com sucesso.");
                     response.sendRedirect("promocoesAdmin.jsp?promoId=" + savedId); return;
                 } catch (NumberFormatException e) { errorMsg = "Desconto inválido."; }
@@ -80,6 +82,7 @@
                 Connection conn = getConnection();
                 PreparedStatement ps = conn.prepareStatement("UPDATE promocoes SET ativo = 1 - ativo WHERE id_promocao = ?");
                 ps.setInt(1, Integer.parseInt(pid)); ps.executeUpdate(); closeAll(null, ps, conn);
+                logAuditoria("Promoção", "ativo alterado", "Estado da promoção alterado (id:" + pid + ")", Integer.parseInt(pid), (Integer) sess.getAttribute("userId"));
                 sess.setAttribute("success", "Estado da promoção alterado.");
                 response.sendRedirect("promocoesAdmin.jsp?promoId=" + pid); return;
             } catch (Exception e) { errorMsg = "Erro: " + e.getMessage(); }

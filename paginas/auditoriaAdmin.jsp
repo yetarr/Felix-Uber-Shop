@@ -28,41 +28,78 @@
         if (_rs8.next()) statCarteira = _rs8.getInt(1);
         closeAll(_rs8, _ps8, null);
 
-        _ps8 = _conn8.prepareStatement("SELECT COUNT(*) FROM encomenda");
+        _ps8 = _conn8.prepareStatement("SELECT COUNT(*) FROM auditoria WHERE categoria='Utilizador'");
+        _rs8 = _ps8.executeQuery();
+        if (_rs8.next()) statUtilizador = _rs8.getInt(1);
+        closeAll(_rs8, _ps8, null);
+
+        _ps8 = _conn8.prepareStatement("SELECT COUNT(*) FROM auditoria WHERE categoria='Produto'");
+        _rs8 = _ps8.executeQuery();
+        if (_rs8.next()) statProduto = _rs8.getInt(1);
+        closeAll(_rs8, _ps8, null);
+
+        _ps8 = _conn8.prepareStatement("SELECT COUNT(*) FROM auditoria WHERE categoria='Encomenda'");
         _rs8 = _ps8.executeQuery();
         if (_rs8.next()) statEncomenda = _rs8.getInt(1);
         closeAll(_rs8, _ps8, null);
 
-        _ps8 = _conn8.prepareStatement("SELECT COUNT(*) FROM promocoes");
+        _ps8 = _conn8.prepareStatement("SELECT COUNT(*) FROM auditoria WHERE categoria='Promoção'");
         _rs8 = _ps8.executeQuery();
         if (_rs8.next()) statPromocao = _rs8.getInt(1);
         closeAll(_rs8, _ps8, null);
 
-        // Audit log — all wallet movements
+        // Query 1: wallet movements
         _ps8 = _conn8.prepareStatement(
-            "SELECT ac.data_operacao, 'Carteira' as categoria, ac.tipo_operacao as acao, " +
-            "u.nome as utilizador, COALESCE(ac.descricao,'') as detalhe, " +
-            "ac.valor " +
+            "SELECT ac.data_operacao, ac.tipo_operacao, COALESCE(u.nome,'') as uname, " +
+            "COALESCE(ac.descricao,'') as det, ac.valor " +
             "FROM auditoria_carteira ac " +
             "JOIN carteira c ON c.id_carteira = ac.id_carteira_origem OR c.id_carteira = ac.id_carteira_destino " +
             "JOIN utilizadores u ON u.id_utilizador = c.id_utilizador AND c.is_loja = 0 " +
             "ORDER BY ac.data_operacao DESC LIMIT 50");
         _rs8 = _ps8.executeQuery();
         while (_rs8.next()) {
-            String tipo = _rs8.getString("acao");
+            String tipo  = _rs8.getString("tipo_operacao");
             double valor = _rs8.getDouble("valor");
             boolean isDebit = "pagamento".equals(tipo) || "levantamento".equals(tipo);
             String sign = isDebit ? "-" : "+";
-            String valorFmt = sign + String.format("%,.2f €", valor).replace(".", ",");
+            String valorFmt = sign + String.format("%.2f €", valor).replace(".", ",");
             logs.add(new String[]{
                 String.valueOf(_rs8.getTimestamp("data_operacao")),
                 "Carteira",
                 tipo,
-                _rs8.getString("utilizador") != null ? _rs8.getString("utilizador") : "",
-                _rs8.getString("detalhe"),
+                _rs8.getString("uname"),
+                _rs8.getString("det"),
                 valorFmt
             });
         }
+        closeAll(_rs8, _ps8, null);
+
+        // Query 2: general audit events
+        _ps8 = _conn8.prepareStatement(
+            "SELECT a.data_evento, a.categoria, a.acao, " +
+            "COALESCE(u.nome,'Sistema') as uname, COALESCE(a.descricao,'') as det " +
+            "FROM auditoria a " +
+            "LEFT JOIN utilizadores u ON u.id_utilizador = a.id_utilizador " +
+            "ORDER BY a.data_evento DESC LIMIT 50");
+        _rs8 = _ps8.executeQuery();
+        while (_rs8.next()) {
+            logs.add(new String[]{
+                String.valueOf(_rs8.getTimestamp("data_evento")),
+                _rs8.getString("categoria"),
+                _rs8.getString("acao"),
+                _rs8.getString("uname"),
+                _rs8.getString("det"),
+                ""
+            });
+        }
+        closeAll(_rs8, _ps8, null);
+
+        // Sort combined list by date descending
+        java.util.Collections.sort(logs, new java.util.Comparator<String[]>() {
+            public int compare(String[] a, String[] b) {
+                return b[0].compareTo(a[0]);
+            }
+        });
     } catch (Exception _e8) {
         // page renders with empty/zero data on error
     } finally {

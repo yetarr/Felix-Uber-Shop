@@ -68,6 +68,7 @@
                         ps.setInt(1, newId); ps.executeUpdate(); ps.close();
                     }
                     conn.close();
+                    logAuditoria("Utilizador", "criado", "Utilizador criado: " + nome.trim() + " (" + perfil + ")", newId > 0 ? newId : null, (Integer) sess.getAttribute("userId"));
                     sess.setAttribute("success", "Utilizador criado com sucesso.");
                     response.sendRedirect("utilizadoresAdmin.jsp"); return;
                 }

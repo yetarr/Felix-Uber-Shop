@@ -122,6 +122,23 @@ CREATE TABLE promocao_produto
 ) ENGINE=InnoDB
   COMMENT='Produtos abrangidos por cada promoção (relação N:M)';
 
+CREATE TABLE auditoria
+(
+    id_log        INT AUTO_INCREMENT PRIMARY KEY,
+    data_evento   DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    categoria     VARCHAR(30) NOT NULL,
+    acao          VARCHAR(60) NOT NULL,
+    descricao     VARCHAR(255),
+    id_referencia INT,
+    id_utilizador INT,
+    CONSTRAINT fk_audit_utilizador
+        FOREIGN KEY (id_utilizador)
+            REFERENCES utilizadores (id_utilizador)
+            ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB
+  CHARACTER SET utf8mb4
+  COMMENT='Auditoria geral de ações no sistema';
+
 CREATE TABLE auditoria_carteira
 (
     id_log              INT AUTO_INCREMENT PRIMARY KEY,

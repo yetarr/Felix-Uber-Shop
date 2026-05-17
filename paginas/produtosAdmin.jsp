@@ -51,6 +51,7 @@
                         ResultSet keys = ps.getGeneratedKeys();
                         String newId = keys.next() ? String.valueOf(keys.getInt(1)) : "";
                         closeAll(null, ps, conn);
+                        logAuditoria("Produto", "criado", "Produto criado: " + nome.trim(), newId.isEmpty() ? null : Integer.parseInt(newId), (Integer) sess.getAttribute("userId"));
                         sess.setAttribute("success", "Produto criado com sucesso.");
                         response.sendRedirect("produtosAdmin.jsp?produtoId=" + newId); return;
                     } else {
@@ -60,6 +61,7 @@
                         ps.setDouble(3, preco); ps.setInt(4, stock); ps.setInt(5, ativo ? 1 : 0);
                         ps.setInt(6, Integer.parseInt(produtoId));
                         ps.executeUpdate(); closeAll(null, ps, conn);
+                        logAuditoria("Produto", "editado", "Produto editado: " + nome.trim(), Integer.parseInt(produtoId), (Integer) sess.getAttribute("userId"));
                         sess.setAttribute("success", "Produto atualizado com sucesso.");
                         response.sendRedirect("produtosAdmin.jsp?produtoId=" + produtoId); return;
                     }
@@ -73,6 +75,7 @@
                 PreparedStatement ps = conn.prepareStatement(
                     "UPDATE produtos SET ativo = 1 - ativo WHERE id_produto = ?");
                 ps.setInt(1, Integer.parseInt(produtoId)); ps.executeUpdate(); closeAll(null, ps, conn);
+                logAuditoria("Produto", "ativo alterado", "Estado do produto alterado (id:" + produtoId + ")", Integer.parseInt(produtoId), (Integer) sess.getAttribute("userId"));
                 sess.setAttribute("success", "Estado do produto alterado.");
                 response.sendRedirect("produtosAdmin.jsp?produtoId=" + produtoId); return;
             } catch (Exception e) { errorMsg = "Erro: " + e.getMessage(); }

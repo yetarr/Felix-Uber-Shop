@@ -47,6 +47,7 @@
                     ps.close();
                 }
                 conn.close();
+                logAuditoria("Promoção", "criada", "Promoção criada: " + titulo.trim(), newId > 0 ? newId : null, (Integer) sess.getAttribute("userId"));
                 sess.setAttribute("success", "Promoção criada com sucesso.");
                 response.sendRedirect("promocoesAdmin.jsp?promoId=" + newId); return;
             } catch (NumberFormatException e) { errorMsg = "Desconto inválido."; }

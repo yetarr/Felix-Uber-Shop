@@ -141,6 +141,7 @@
                     }
                     ps = conn.prepareStatement("UPDATE encomenda SET total = ? WHERE id_encomenda = ?");
                     ps.setDouble(1, total); ps.setInt(2, oid); ps.executeUpdate(); closeAll(null, ps, conn);
+                    logAuditoria("Encomenda", "criada", "Encomenda criada pelo admin (id:" + oid + ")", oid, (Integer) sess.getAttribute("userId"));
                     sess.setAttribute("success", "Encomenda criada com sucesso.");
                     response.sendRedirect("criarEditarEncomendaAdmin.jsp?id=" + oid); return;
                 }
@@ -197,6 +198,7 @@
                                 ps.executeUpdate(); ps.close();
                                 ps = conn.prepareStatement("UPDATE encomenda SET estado = ? WHERE id_encomenda = ?");
                                 ps.setString(1, novoEstado); ps.setInt(2, oid); ps.executeUpdate(); closeAll(null, ps, conn);
+                                logAuditoria("Encomenda", "confirmada", "Encomenda #" + oid + " confirmada e paga (" + String.format("%.2f", total) + " EUR)", oid, (Integer) sess.getAttribute("userId"));
                                 sess.setAttribute("success", "Encomenda confirmada e pagamento processado.");
                                 response.sendRedirect("criarEditarEncomendaAdmin.jsp?id=" + oid); return;
                             }
@@ -216,16 +218,19 @@
                             ps.executeUpdate(); ps.close();
                             ps = conn.prepareStatement("UPDATE encomenda SET estado = ? WHERE id_encomenda = ?");
                             ps.setString(1, novoEstado); ps.setInt(2, oid); ps.executeUpdate(); closeAll(null, ps, conn);
+                            logAuditoria("Encomenda", "cancelada", "Encomenda #" + oid + " cancelada e reembolsada (" + String.format("%.2f", total) + " EUR)", oid, (Integer) sess.getAttribute("userId"));
                             sess.setAttribute("success", "Encomenda cancelada e reembolso processado.");
                             response.sendRedirect("criarEditarEncomendaAdmin.jsp?id=" + oid); return;
                         } else {
                             ps = conn.prepareStatement("UPDATE encomenda SET estado = ? WHERE id_encomenda = ?");
                             ps.setString(1, novoEstado); ps.setInt(2, oid); ps.executeUpdate(); closeAll(null, ps, conn);
+                            logAuditoria("Encomenda", "estado alterado", "Encomenda #" + oid + ": " + estadoAnterior + " -> " + novoEstado, oid, (Integer) sess.getAttribute("userId"));
                             sess.setAttribute("success", "Encomenda atualizada.");
                             response.sendRedirect("criarEditarEncomendaAdmin.jsp?id=" + oid); return;
                         }
                     } else {
                         conn.close();
+                        logAuditoria("Encomenda", "editada", "Encomenda #" + oid + " editada pelo admin", oid, (Integer) sess.getAttribute("userId"));
                         sess.setAttribute("success", "Encomenda atualizada com sucesso.");
                         response.sendRedirect("criarEditarEncomendaAdmin.jsp?id=" + oid); return;
                     }

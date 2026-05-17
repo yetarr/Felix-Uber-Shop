@@ -36,6 +36,7 @@
                 ps.setInt(4, stock);
                 ps.setString(5, categoria != null ? categoria.trim() : null);
                 ps.executeUpdate(); closeAll(null, ps, conn);
+                logAuditoria("Produto", "criado", "Produto criado: " + nome.trim(), null, (Integer) sess.getAttribute("userId"));
                 sess.setAttribute("success", "Produto criado com sucesso.");
                 response.sendRedirect("produtosAdmin.jsp"); return;
             } catch (NumberFormatException e) { errorMsg = "Preço ou stock inválido."; }

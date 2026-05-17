@@ -112,6 +112,7 @@
                     ps.close();
 
                     conn.commit();
+                    logAuditoria("Encomenda", "criada", "Encomenda " + codigoUnico + " (total: " + String.format("%.2f", total) + " EUR)", oid, userId);
                     sess.setAttribute("success", "Encomenda criada com sucesso.");
                     response.sendRedirect("encomendas.jsp?detalhe=" + oid);
                     return;
