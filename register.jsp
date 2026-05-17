@@ -1,12 +1,81 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*" %>
+<%@ page import="java.security.MessageDigest, java.nio.charset.StandardCharsets" %>
+<%@ include file="../basedados/basedados.h"%>
+<%!
+    // Hashing da password
+    private String hashPassword(String plain) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(plain.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            throw new RuntimeException("Erro ao encriptar password", e);
+        }
+    }
+%>
 <%
-    String errorMsg = (String) request.getAttribute("error");
-    String successMsg = (String) request.getAttribute("success");
+    String errorMsg = null;
+    String successMsg = null;
 
-    String nomeVal = request.getParameter("nome") != null ? request.getParameter("nome") : "";
-    String emailVal = request.getParameter("email") != null ? request.getParameter("email") : "";
-    String telefoneVal = request.getParameter("telefone") != null ? request.getParameter("telefone") : "";
+    String nomeVal = "";
+    String emailVal = "";
+    String telefoneVal = "";
+
+    if ("POST".equalsIgnoreCase(request.getMethod())) {
+        nomeVal = request.getParameter("nome") != null ? request.getParameter("nome") : "";
+        emailVal = request.getParameter("email") != null ? request.getParameter("email") : "";
+        telefoneVal = request.getParameter("telefone") != null ? request.getParameter("telefone") : "";
+        String password = request.getParameter("password");
+        String confirm  = request.getParameter("confirmPassword");
+
+        // Validacao dos campos
+        if (nomeVal.isBlank() || emailVal.isBlank() || password == null || password.isBlank()) {
+            errorMsg = "Preencha todos os campos obrigatórios.";
+
+        } else if (!password.equals(confirm)) {
+            errorMsg = "As passwords não coincidem.";
+
+        } else if (password.length() < 6) {
+            errorMsg = "A password deve ter mínimo 6 caracteres.";
+
+        } else {
+            try {
+                Connection conn = getConnection();
+
+                // Verificar por emails duplicados
+                String checkSql = "SELECT id_utilizador FROM utilizadores WHERE email = ?";
+                PreparedStatement check = conn.prepareStatement(checkSql);
+                check.setString(1, emailVal);
+                if (check.executeQuery().next()) {
+                    errorMsg = "Este email já está registado.";
+                } else {
+                    // Inserir dados a base de dados
+                    String insertSql = "INSERT INTO utilizadores (nome, email, telefone, password_hash, perfil) " +
+                            "VALUES (?, ?, ?, ?, 'cliente')";
+                    PreparedStatement ps = conn.prepareStatement(insertSql);
+                    ps.setString(1, nomeVal);
+                    ps.setString(2, emailVal);
+                    ps.setString(3, telefoneVal);
+                    ps.setString(4, hashPassword(password));
+                    ps.executeUpdate();
+                    ps.close();
+
+                    // Redirecionar para o login
+                    request.getSession().setAttribute("success", "Conta criada! Pode iniciar sessão.");
+                    conn.close();
+                    response.sendRedirect("login.jsp");
+                    return;
+                }
+
+                check.close(); conn.close();
+            } catch (Exception e) {
+                errorMsg = "Erro ao criar conta: " + e.getMessage();
+            }
+        }
+    }
 %>
 <!DOCTYPE html>
 <html lang="pt">
@@ -319,7 +388,6 @@
 </head>
 <body>
 
-<!-- NAV -->
 <nav>
     <a href="index.jsp" class="nav-brand">FelixUberShop</a>
     <div class="nav-links">
@@ -328,11 +396,9 @@
     </div>
 </nav>
 
-<!-- MAIN -->
 <main>
     <div class="card">
 
-        <!-- Header -->
         <div class="card-header">
             <div class="avatar">
                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -343,7 +409,6 @@
             <p class="card-subtitle">Junte-se à FelixUberShop hoje</p>
         </div>
 
-        <!-- Alerts -->
         <% if (errorMsg != null && !errorMsg.isEmpty()) { %>
         <div class="alert alert-error">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="#f08080">
@@ -362,10 +427,8 @@
         </div>
         <% } %>
 
-        <!-- Form -->
-        <form action="RegisterServlet" method="post" autocomplete="off" onsubmit="return validateForm()">
+        <form action="register.jsp" method="post" autocomplete="off" onsubmit="return validateForm()">
 
-            <!-- Nome completo -->
             <div class="form-group">
                 <label for="nome">Nome completo <span class="required">*</span></label>
                 <div class="input-wrap">
@@ -385,7 +448,6 @@
                 </div>
             </div>
 
-            <!-- Email -->
             <div class="form-group">
                 <label for="email">Email <span class="required">*</span></label>
                 <div class="input-wrap">
@@ -405,7 +467,6 @@
                 </div>
             </div>
 
-            <!-- Telefone -->
             <div class="form-group">
                 <label for="telefone">Telefone</label>
                 <div class="input-wrap">
@@ -425,10 +486,8 @@
                 </div>
             </div>
 
-            <!-- Password row -->
             <div class="row-2col">
 
-                <!-- Password -->
                 <div class="form-group">
                     <label for="password">Password <span class="required">*</span></label>
                     <div class="input-wrap">
@@ -455,7 +514,6 @@
                     <p class="hint">Mínimo 6 caracteres</p>
                 </div>
 
-                <!-- Confirmar Password -->
                 <div class="form-group">
                     <label for="confirmPassword">Confirmar Password <span class="required">*</span></label>
                     <div class="input-wrap">
