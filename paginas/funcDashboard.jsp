@@ -4,7 +4,7 @@
 <%@ include file="../basedados/basedados.h" %>
 <%
     // Session check
-    if (session.getAttribute("userId") == null || !"funcionario".equals(session.getAttribute("userPerfil"))) {
+    if (session.getAttribute("userId") == null || !"funcionario".equals(session.getAttribute("userRole"))) {
         response.sendRedirect("login.jsp");
         return;
     }
