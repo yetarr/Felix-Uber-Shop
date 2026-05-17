@@ -1,27 +1,123 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*" %>
+<%@ include file="../basedados/basedados.h" %>
 <%
-    String clienteName = "cliente de teste";
-    String saldoDisp = "50,00 €";
-    String totalEnc = "3";
-    String totalGasto = "12,47 €";
+    String clientId = "";
+    String clienteName = "";
+    String saldoDisp = "";
+    String totalEnc = "0";
+    String totalGasto = "0";
 
-    String carteiraAtiva = "50,00 €";
-    int pendentes = 1;
-    int confirmadas = 2;
+    List<String[]> orders = new ArrayList<>();
+    List<String[]> movements = new ArrayList<>();
 
-    String[][] orders = {
-            {"#3", "04/05/2026", "1,78 €", "Pendente"},
-            {"#2", "02/05/2026", "5,78 €", "Confirmada"},
-            {"#1", "01/05/2026", "4,91 €", "Confirmada"},
-    };
+    String carteiraAtiva = "";
+    int pendentes = 0;
+    int confirmadas = 0;
 
-    String[][] movements = {
-            {"Pagamento enc. #3", "04/05/2026 14:32", "-1,78 €"},
-            {"Depósito", "03/05/2026 10:00", "+20,00 €"},
-            {"Pagamento enc. #2", "02/05/2026 09:55", "-5,78 €"},
-            {"Depósito", "01/05/2026 08:00", "+50,00 €"},
-    };
+    HttpSession sess = request.getSession(false);
+    if (sess != null) {
+        clientId = String.valueOf(sess.getAttribute("userId"));
+        clienteName = (String) sess.getAttribute("userName");
+        saldoDisp = String.valueOf(sess.getAttribute("userSaldo"));
+
+        try {
+            // Obter encomendas da base de dados
+            Connection conn = getConnection();
+            String sql = "SELECT e.*, u.ativo " +
+                    "FROM encomenda e " +
+                    "LEFT JOIN utilizadores u ON u.id_utilizador = e.id_utilizador " +
+                    "WHERE u.id_utilizador = ? " +
+                    "LIMIT 10; ";
+            PreparedStatement ps = conn.prepareStatement(sql);
+            ps.setString(1, clientId);
+            ResultSet rs = ps.executeQuery();
+
+            while (rs.next()) {
+                if (!rs.getBoolean("ativo")) {
+                    sess.setAttribute("errorMsg", "Conta inativa. Contacte o suporte.");
+                    response.sendRedirect("login.jsp");
+                } else {
+                    String id = (rs.getString("id_encomenda"));
+                    String codigoUnico = (rs.getString("codigo_unico"));
+                    String data = (rs.getString("data_encomenda"));
+                    String estado = (rs.getString("estado"));
+                    String total = (rs.getString("total"));
+                    String notas = (rs.getString("notas"));
+                    String[] order = {
+                            id,
+                            codigoUnico,
+                            data,
+                            estado,
+                            total,
+                            notas
+                    };
+
+                    totalEnc = String.valueOf(Integer.parseInt(totalEnc) + 1);
+                    Double newTotal = Double.parseDouble(totalGasto) + Double.parseDouble(total);
+                    totalGasto = String.format("%.2f", newTotal);
+                    if (estado.equals("pendente")){
+                        pendentes++;
+                    } else if (estado.equals("confirmada")) {
+                        confirmadas++;
+                    }
+
+                    orders.add(order);
+                }
+            }
+
+            rs.close(); ps.close();
+
+            // Obter movimentos da carteira
+            sql = "SELECT a.* " +
+                    "FROM auditoria_carteira a " +
+                    "LEFT JOIN carteira c " +
+                    "ON c.id_carteira = a.id_carteira_origem " +
+                    "OR c.id_carteira = a.id_carteira_destino " +
+                    "WHERE c.id_utilizador = ? " +
+                    "ORDER BY a.data_operacao DESC " +
+                    "LIMIT 4; ";
+            ps = conn.prepareStatement(sql);
+            ps.setString(1, clientId);
+            rs = ps.executeQuery();
+
+            while (rs.next()) {
+                String id = (rs.getString("id_log"));
+                String id_carteira_origem = (rs.getString("id_carteira_origem"));
+                String id_carteira_destino = (rs.getString("id_carteira_destino"));
+                String valor = (rs.getString("valor"));
+                String descricao = (rs.getString("descricao"));
+                String tipo_operacao = (rs.getString("tipo_operacao"));
+                String data_operacao = (rs.getString("data_operacao"));
+
+                if (tipo_operacao.equals("pagamento")){
+                    valor = "-" + valor;
+                } else {
+                    valor = "+" + valor;
+                }
+
+                String[] movement = {
+                        id,
+                        id_carteira_origem,
+                        id_carteira_destino,
+                        valor,
+                        descricao,
+                        tipo_operacao,
+                        data_operacao
+                };
+
+                movements.add(movement);
+            }
+
+            conn.close(); rs.close(); ps.close();
+        } catch (Exception e) {
+            sess.setAttribute("errorMsg", "Erro na dashboard: " + e.getMessage());
+            response.sendRedirect("login.jsp");
+        }
+    } else {
+        sess.setAttribute("errorMsg", "Nenhuma sessao encontrada");
+        response.sendRedirect("login.jsp");
+    }
 
     String activePage = "dashboard";
 %>
@@ -644,9 +740,9 @@
                     <tbody>
                     <%
                         for (String[] o : orders) {
-                            String oid = o[0];
-                            String odate = o[1];
-                            String ototal = o[2];
+                            String oid = o[1];
+                            String odate = o[2];
+                            String ototal = o[4];
                             String ostatus = o[3];
                             String badgeClass = "badge-confirmada";
                             if ("Pendente".equalsIgnoreCase(ostatus)) badgeClass = "badge-pendente";
@@ -695,9 +791,9 @@
                 <ul class="movement-list">
                     <%
                         for (String[] m : movements) {
-                            String mdesc = m[0];
-                            String mdate = m[1];
-                            String mamount = m[2];
+                            String mdesc = m[4];
+                            String mdate = m[6];
+                            String mamount = m[3];
                             boolean isCredit = mamount.startsWith("+");
                     %>
                     <li class="movement-item">
@@ -719,7 +815,7 @@
                             <div class="mov-date"><%= mdate %>
                             </div>
                         </div>
-                        <div class="mov-amount <%= isCredit ? "credit" : "debit" %>"><%= mamount %>
+                        <div class="mov-amount <%= isCredit ? "credit" : "debit" %>"><%= mamount %>€
                         </div>
                     </li>
                     <% } %>
