@@ -36,8 +36,8 @@
             boolean ativo = "true".equalsIgnoreCase(request.getParameter("ativo"));
 
             String perfil = "cliente";
-            if ("Funcionário".equalsIgnoreCase(perfilRaw) || "funcionario".equalsIgnoreCase(perfilRaw)) perfil = "funcionario";
-            else if ("Admin".equalsIgnoreCase(perfilRaw) || "administrador".equalsIgnoreCase(perfilRaw)) perfil = "administrador";
+            if ("funcionario".equals(perfilRaw))    perfil = "funcionario";
+            else if ("administrador".equals(perfilRaw)) perfil = "administrador";
 
             if (nome == null || nome.isBlank() || email == null || email.isBlank()) {
                 errorMsg = "Nome e email são obrigatórios.";
@@ -1105,9 +1105,9 @@
                         <div class="field-group">
                             <label class="field-label">Perfil</label>
                             <select name="perfil" id="fieldPerfil" class="field-select">
-                                <option value="Cliente"     <%= "Cliente".equals(selPerfil)     ? "selected" : "" %>>Cliente</option>
-                                <option value="Funcionário" <%= "Funcionário".equals(selPerfil) ? "selected" : "" %>>Funcionário</option>
-                                <option value="Admin"       <%= "Admin".equals(selPerfil)       ? "selected" : "" %>>Admin</option>
+                                <option value="cliente"        <%= "Cliente".equals(selPerfil)     ? "selected" : "" %>>Cliente</option>
+                                <option value="funcionario"    <%= "Funcionário".equals(selPerfil) ? "selected" : "" %>>Funcionário</option>
+                                <option value="administrador"  <%= "Admin".equals(selPerfil)       ? "selected" : "" %>>Admin</option>
                             </select>
                         </div>
 
