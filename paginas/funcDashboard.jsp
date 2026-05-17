@@ -800,7 +800,7 @@
                                     ? "" + parts[0].charAt(0) + parts[1].charAt(0)
                                     : "" + parts[0].charAt(0);
                     %>
-                    <tr onclick="location.href='funcEncomendas.jsp?id=<%= oid %>'">
+                    <tr onclick="location.href='funcEncomendas.jsp?detalhe=<%= oid %>'">
                         <td class="order-id">#<%= oid %>
                         </td>
                         <td>

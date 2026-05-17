@@ -6,11 +6,43 @@
     HttpSession sess = request.getSession(false);
     if (sess == null || sess.getAttribute("userId") == null
             || !"funcionario".equalsIgnoreCase((String) sess.getAttribute("userRole"))) {
-        response.sendRedirect("funcDashboard.jsp");
+        response.sendRedirect("login.jsp");
         return;
     }
 
     String funcName = (String) sess.getAttribute("userName");
+
+    if ("POST".equalsIgnoreCase(request.getMethod()) && "validar".equals(request.getParameter("action"))) {
+        String eid = request.getParameter("id");
+        try {
+            Connection _vc = getConnection();
+            PreparedStatement _vps = _vc.prepareStatement(
+                "UPDATE encomenda SET estado='pronto' WHERE id_encomenda=? AND estado='pendente'");
+            _vps.setInt(1, Integer.parseInt(eid));
+            int rows = _vps.executeUpdate();
+            closeAll(null, _vps, _vc);
+            sess.setAttribute("success", rows > 0 ? "Encomenda #" + eid + " confirmada com sucesso." : "Encomenda não encontrada ou já confirmada.");
+        } catch (Exception _ve) {
+            sess.setAttribute("errorMsg", "Erro: " + _ve.getMessage());
+        }
+        response.sendRedirect("funcEncomendas.jsp"); return;
+    }
+
+    if ("POST".equalsIgnoreCase(request.getMethod()) && "cancelar".equals(request.getParameter("action"))) {
+        String eid = request.getParameter("id");
+        try {
+            Connection _vc = getConnection();
+            PreparedStatement _vps = _vc.prepareStatement(
+                "UPDATE encomenda SET estado='cancelado' WHERE id_encomenda=? AND estado IN ('pendente','processando','pronto')");
+            _vps.setInt(1, Integer.parseInt(eid));
+            int rows = _vps.executeUpdate();
+            closeAll(null, _vps, _vc);
+            sess.setAttribute("success", rows > 0 ? "Encomenda #" + eid + " cancelada." : "Encomenda não encontrada ou já cancelada.");
+        } catch (Exception _ve) {
+            sess.setAttribute("errorMsg", "Erro: " + _ve.getMessage());
+        }
+        response.sendRedirect("funcEncomendas.jsp"); return;
+    }
 
     String filterCliente = request.getParameter("cliente") != null ? request.getParameter("cliente") : "";
     String filterEstado  = request.getParameter("estado")  != null ? request.getParameter("estado")  : "";
@@ -19,8 +51,8 @@
     List<String[]> allOrders = new ArrayList<>();
     Map<String, String[][]> details = new LinkedHashMap<>();
 
-    String successMsg = (String) request.getAttribute("success");
-    String errorMsg   = (String) request.getAttribute("error");
+    String successMsg = (String) sess.getAttribute("success"); if (successMsg != null) sess.removeAttribute("success");
+    String errorMsg   = (String) sess.getAttribute("errorMsg"); if (errorMsg != null) sess.removeAttribute("errorMsg");
 
     String openDetail = request.getParameter("detalhe");
 
@@ -57,24 +89,33 @@
         // Determine which order detail to open
         if (openDetail == null && !allOrders.isEmpty()) openDetail = allOrders.get(0)[0];
 
-        // Load items for the open order only
-        if (openDetail != null && !openDetail.isEmpty()) {
-            String sqlItems = "SELECT p.nome, ep.preco_unitario, ep.quantidade " +
+        // Load items for ALL orders
+        if (!allOrders.isEmpty()) {
+            String placeholders = String.join(",", Collections.nCopies(allOrders.size(), "?"));
+            String sqlItems = "SELECT ep.id_encomenda, p.nome, ep.preco_unitario, ep.quantidade " +
                               "FROM encomenda_produto ep JOIN produtos p ON p.id_produto = ep.id_produto " +
-                              "WHERE ep.id_encomenda = ?";
+                              "WHERE ep.id_encomenda IN (" + placeholders + ")";
             ps = conn.prepareStatement(sqlItems);
-            ps.setInt(1, Integer.parseInt(openDetail));
+            for (int _i = 0; _i < allOrders.size(); _i++) {
+                ps.setInt(_i + 1, Integer.parseInt(allOrders.get(_i)[0]));
+            }
             rs = ps.executeQuery();
-            List<String[]> itemsList = new ArrayList<>();
+            Map<String, List<String[]>> tempDetails = new LinkedHashMap<>();
             while (rs.next()) {
+                String eid         = rs.getString("id_encomenda");
                 String nome        = rs.getString("nome");
                 double preco       = rs.getDouble("preco_unitario");
                 int    qty         = rs.getInt("quantidade");
                 String fmtPreco    = String.format("%.2f €", preco).replace(".", ",");
                 String fmtSubtotal = String.format("%.2f €", preco * qty).replace(".", ",");
-                itemsList.add(new String[]{nome, fmtPreco, String.valueOf(qty), fmtSubtotal});
+                if (!tempDetails.containsKey(eid)) tempDetails.put(eid, new ArrayList<String[]>());
+                tempDetails.get(eid).add(new String[]{nome, fmtPreco, String.valueOf(qty), fmtSubtotal});
             }
-            details.put(openDetail, itemsList.toArray(new String[0][]));
+            closeAll(rs, ps, null);
+            rs = null; ps = null;
+            for (Map.Entry<String, List<String[]>> entry : tempDetails.entrySet()) {
+                details.put(entry.getKey(), entry.getValue().toArray(new String[0][]));
+            }
         }
     } catch (Exception e) {
         // Page renders with empty lists on error
@@ -944,18 +985,24 @@
                                 &#9660;
                             </button>
                             <% if (isPendente) { %>
-                            <a href="ValidarEncomendaServlet?id=<%= oid %>"
-                               class="btn-validar"
-                               onclick="return confirm('Confirmar encomenda #<%= oid %>?')">Validar</a>
+                            <form method="post" action="funcEncomendas.jsp" style="display:inline;margin:0"
+                                  onsubmit="return confirm('Confirmar encomenda #<%= oid %>?')">
+                                <input type="hidden" name="action" value="validar"/>
+                                <input type="hidden" name="id" value="<%= oid %>"/>
+                                <button type="submit" class="btn-validar">Validar</button>
+                            </form>
                             <% } %>
                             <% if (!isCancelada) { %>
                             <a href="funcEditarEncomenda.jsp?id=<%= oid %>"
                                class="btn-editar">Editar</a>
                             <% } %>
                             <% if (isPendente || isConfirmada) { %>
-                            <a href="CancelarEncomendaServlet?id=<%= oid %>"
-                               class="btn-cancelar"
-                               onclick="return confirm('Cancelar encomenda #<%= oid %>?')">Cancelar</a>
+                            <form method="post" action="funcEncomendas.jsp" style="display:inline;margin:0"
+                                  onsubmit="return confirm('Cancelar encomenda #<%= oid %>?')">
+                                <input type="hidden" name="action" value="cancelar"/>
+                                <input type="hidden" name="id" value="<%= oid %>"/>
+                                <button type="submit" class="btn-cancelar">Cancelar</button>
+                            </form>
                             <% } %>
                         </div>
                     </td>
@@ -990,18 +1037,24 @@
                 </div>
                 <div class="detail-actions">
                     <% if (isPend) { %>
-                    <a href="ValidarEncomendaServlet?id=<%= oid %>"
-                       class="btn-validar" style="font-size:.78rem;"
-                       onclick="return confirm('Confirmar encomenda #<%= oid %>?')">✓ Validar</a>
+                    <form method="post" action="funcEncomendas.jsp" style="display:inline;margin:0"
+                          onsubmit="return confirm('Confirmar encomenda #<%= oid %>?')">
+                        <input type="hidden" name="action" value="validar"/>
+                        <input type="hidden" name="id" value="<%= oid %>"/>
+                        <button type="submit" class="btn-validar" style="font-size:.78rem;">✓ Validar</button>
+                    </form>
                     <% } %>
                     <% if (!("Cancelada".equalsIgnoreCase(ostat))) { %>
                     <a href="funcEditarEncomenda.jsp?id=<%= oid %>"
                        class="btn-editar" style="font-size:.78rem;">Editar</a>
                     <% } %>
                     <% if (isPend || isConf) { %>
-                    <a href="CancelarEncomendaServlet?id=<%= oid %>"
-                       class="btn-cancelar" style="font-size:.78rem;"
-                       onclick="return confirm('Cancelar encomenda #<%= oid %>?')">Cancelar</a>
+                    <form method="post" action="funcEncomendas.jsp" style="display:inline;margin:0"
+                          onsubmit="return confirm('Cancelar encomenda #<%= oid %>?')">
+                        <input type="hidden" name="action" value="cancelar"/>
+                        <input type="hidden" name="id" value="<%= oid %>"/>
+                        <button type="submit" class="btn-cancelar" style="font-size:.78rem;">Cancelar</button>
+                    </form>
                     <% } %>
                     <button class="detail-close" onclick="closeDetail('<%= oid %>')" title="Fechar">&times;</button>
                 </div>

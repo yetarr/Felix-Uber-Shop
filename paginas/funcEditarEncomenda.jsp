@@ -4,17 +4,51 @@
 <%@ include file="../basedados/basedados.h" %>
 <%
     // Session check
-    if (session.getAttribute("userId") == null || !"funcionario".equals(session.getAttribute("userPerfil"))) {
+    if (session.getAttribute("userId") == null || !"funcionario".equals(session.getAttribute("userRole"))) {
         response.sendRedirect("login.jsp");
         return;
     }
     String funcName = (String) session.getAttribute("userName");
+
+    if ("POST".equalsIgnoreCase(request.getMethod())) {
+        String _action = request.getParameter("action");
+        String _eid    = request.getParameter("id");
+        if ("validar".equals(_action)) {
+            try {
+                Connection _vc = getConnection();
+                PreparedStatement _vps = _vc.prepareStatement(
+                    "UPDATE encomenda SET estado='pronto' WHERE id_encomenda=? AND estado='pendente'");
+                _vps.setInt(1, Integer.parseInt(_eid));
+                int rows = _vps.executeUpdate();
+                closeAll(null, _vps, _vc);
+                session.setAttribute("success", rows > 0 ? "Encomenda #" + _eid + " validada com sucesso." : "Encomenda não encontrada ou já validada.");
+            } catch (Exception _ve) {
+                session.setAttribute("errorMsg", "Erro: " + _ve.getMessage());
+            }
+            response.sendRedirect("funcEncomendas.jsp"); return;
+        } else if ("cancelar".equals(_action)) {
+            try {
+                Connection _vc = getConnection();
+                PreparedStatement _vps = _vc.prepareStatement(
+                    "UPDATE encomenda SET estado='cancelado' WHERE id_encomenda=? AND estado IN ('pendente','processando','pronto')");
+                _vps.setInt(1, Integer.parseInt(_eid));
+                int rows = _vps.executeUpdate();
+                closeAll(null, _vps, _vc);
+                session.setAttribute("success", rows > 0 ? "Encomenda #" + _eid + " cancelada." : "Encomenda não encontrada ou já cancelada.");
+            } catch (Exception _ve) {
+                session.setAttribute("errorMsg", "Erro: " + _ve.getMessage());
+            }
+            response.sendRedirect("funcEncomendas.jsp"); return;
+        }
+    }
+
     String orderId = request.getParameter("id") != null ? request.getParameter("id") : "8";
 
     String orderCliente = "";
     String orderData    = "";
     String orderStatus  = "pendente";
     String saldoCliente = "0,00";
+    int    clientUserId = 0;
     List<Object[]> catalogue = new ArrayList<>();
 
     Connection _conn5 = null;
@@ -32,7 +66,6 @@
             "WHERE e.id_encomenda=?");
         _ps5.setInt(1, orderIdInt);
         _rs5 = _ps5.executeQuery();
-        int clientUserId = 0;
         if (_rs5.next()) {
             orderStatus  = _rs5.getString("estado");
             orderData    = String.valueOf(_rs5.getTimestamp("data_encomenda"));
@@ -1105,6 +1138,7 @@
                             int curQty = (Integer) p[5];
                             String priceStr = String.format("%d,%02d €", price / 100, price % 100);
                             String fullName = pname + (!pqlbl.isEmpty() ? " " + pqlbl : "");
+                            String safeName = fullName.replace("'", "\\'");
                     %>
                     <div class="product-card <%= curQty > 0 ? "has-qty" : "" %>" id="card-<%= pid %>">
                         <% if (disc > 0) { %><span class="disc-badge">-<%= disc %>%</span><% } %>
@@ -1122,11 +1156,11 @@
                         <div class="product-price"><%= priceStr %>
                         </div>
                         <div class="stepper">
-                            <button type="button" onclick="changeQty('<%= pid %>',-1,<%= price %>,'<%= fullName %>')">
+                            <button type="button" onclick="changeQty('<%= pid %>',-1,<%= price %>,'<%= safeName %>')">
                                 &#8722;
                             </button>
                             <span class="qty-val" id="qty-<%= pid %>"><%= curQty %></span>
-                            <button type="button" onclick="changeQty('<%= pid %>',1,<%= price %>,'<%= fullName %>')">
+                            <button type="button" onclick="changeQty('<%= pid %>',1,<%= price %>,'<%= safeName %>')">
                                 &#43;
                             </button>
                         </div>
@@ -1205,14 +1239,17 @@
                         <% if (isPendente) { %>
                         <div class="action-divider"></div>
                         <!-- Staff-only: Validar directly -->
-                        <a href="ValidarEncomendaServlet?id=<%= orderId %>&redirect=funcEncomendas"
-                           class="btn-validar-enc"
-                           onclick="return confirm('Validar e confirmar encomenda #<%= orderId %>?')">
-                            <svg viewBox="0 0 24 24">
-                                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
-                            </svg>
-                            Validar encomenda
-                        </a>
+                        <form method="post" action="funcEditarEncomenda.jsp?id=<%= orderId %>" style="margin:0"
+                              onsubmit="return confirm('Validar e confirmar encomenda #<%= orderId %>?')">
+                            <input type="hidden" name="action" value="validar"/>
+                            <input type="hidden" name="id" value="<%= orderId %>"/>
+                            <button type="submit" class="btn-validar-enc">
+                                <svg viewBox="0 0 24 24">
+                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                                </svg>
+                                Validar encomenda
+                            </button>
+                        </form>
                         <% } %>
 
                         <div class="action-divider"></div>
@@ -1268,8 +1305,9 @@
            String ql   = (String)  p[2];
            int price   = (Integer) p[3];
            int curQty  = (Integer) p[5];
+           String sn   = (pn + (!ql.isEmpty() ? " "+ql : "")).replace("'", "\\'");
            if (curQty > 0) { %>
-    cart['<%= pid %>'] = {name: '<%= pn + (!ql.isEmpty() ? " "+ql : "") %>', price: <%= price %>, qty: <%= curQty %>};
+    cart['<%= pid %>'] = {name: '<%= sn %>', price: <%= price %>, qty: <%= curQty %>};
     <% }} %>
 
     function fmt(cents) {
@@ -1308,17 +1346,16 @@
         items.forEach(([, item]) => {
             const sub = item.price * item.qty;
             total += sub;
-            html += `<div class="order-item">
-                    <span><span class="iname">${item.name}</span><span class="iqty">x ${item.qty}</span></span>
-                    <span class="iprice">${fmt(sub)}</span>
-                </div>`;
+            html += '<div class="order-item">' +
+                    '<span><span class="iname">' + item.name + '</span><span class="iqty">x ' + item.qty + '</span></span>' +
+                    '<span class="iprice">' + fmt(sub) + '</span>' +
+                    '</div>';
         });
         box.innerHTML = html;
         document.getElementById('totalValue').textContent = fmt(total);
 
-        const insuf = total > Math.round(saldo * 100);
-        document.getElementById('saldoWarn').style.display = insuf ? 'block' : 'none';
-        document.getElementById('btnConfirmar').disabled = insuf;
+        document.getElementById('saldoWarn').style.display = 'none';
+        document.getElementById('btnConfirmar').disabled = false;
     }
 
     document.getElementById('estadoSelect').addEventListener('change', function () {
@@ -1331,7 +1368,7 @@
         const entries = Object.entries(cart);
         if (!entries.length) return false;
         entries.forEach(([pid, item]) => {
-            hi.innerHTML += `<input type="hidden" name="produto_${pid}" value="${item.qty}"/>`;
+            hi.innerHTML += '<input type="hidden" name="produto_' + pid + '" value="' + item.qty + '"/>';
         });
         return true;
     }

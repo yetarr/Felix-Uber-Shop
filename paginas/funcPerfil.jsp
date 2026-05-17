@@ -15,7 +15,7 @@
 <%
     HttpSession sess = request.getSession(false);
     if (sess == null || sess.getAttribute("userId") == null) { response.sendRedirect("login.jsp"); return; }
-    if (!"funcionario".equals(sess.getAttribute("userRole"))) { response.sendRedirect("dashboard.jsp"); return; }
+    if (!"funcionario".equals(sess.getAttribute("userRole"))) { response.sendRedirect("login.jsp"); return; }
 
     String funcName = (String) sess.getAttribute("userName");
     if (funcName == null) funcName = "Funcionário";

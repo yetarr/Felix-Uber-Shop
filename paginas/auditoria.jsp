@@ -4,8 +4,8 @@
 <%@ include file="../basedados/basedados.h" %>
 <%
     // Session check
-    if (session.getAttribute("userId") == null || !"funcionario".equals(session.getAttribute("userPerfil"))) {
-        response.sendRedirect("funcDashboard.jsp");
+    if (session.getAttribute("userId") == null || !"funcionario".equals(session.getAttribute("userRole"))) {
+        response.sendRedirect("login.jsp");
         return;
     }
     String funcName = (String) session.getAttribute("userName");

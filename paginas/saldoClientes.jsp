@@ -4,9 +4,8 @@
 <%
     // Session check — funcionario role
     HttpSession sessao = request.getSession(false);
-    String userPerfil = (sessao != null) ? (String) sessao.getAttribute("perfil") : null;
-    if (sessao == null || !"funcionario".equalsIgnoreCase(userPerfil)) {
-        response.sendRedirect("funcDashboard.jsp");
+    if (sessao == null || !"funcionario".equalsIgnoreCase((String) sessao.getAttribute("userRole"))) {
+        response.sendRedirect("login.jsp");
         return;
     }
     String funcName = (String) sessao.getAttribute("userName");
