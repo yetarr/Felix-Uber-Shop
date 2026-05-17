@@ -1,4 +1,4 @@
-<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
+﻿<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ page import="java.util.*" %>
 <%
     String adminName = "Administrador";
@@ -524,7 +524,7 @@
             </svg>
             Olá, <strong style="color:#e0e0e0;margin-left:4px;"><%= adminName %></strong>
         </div>
-        <a href="LogoutServlet" class="btn-sair">Sair</a>
+        <a href="login.jsp" class="btn-sair">Sair</a>
     </div>
 </nav>
 
@@ -542,7 +542,7 @@
                 </a>
             </li>
             <li>
-                <a href="funcEncomendas.jsp" class="<%= "encomendas".equals(activePage) ? "active" : "" %>">
+                <a href="encomendasAdmin.jsp" class="<%= "encomendas".equals(activePage) ? "active" : "" %>">
                     <svg viewBox="0 0 24 24">
                         <path d="M20 6h-2.18A3 3 0 0 0 15 4H9a3 3 0 0 0-2.82 2H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-11 0h6c.55 0 1 .45 1 1s-.45 1-1 1H9c-.55 0-1-.45-1-1s.45-1 1-1zM8 13h8v1.5H8V13zm0 3h5v1.5H8V16z"/>
                     </svg>
@@ -550,7 +550,7 @@
                 </a>
             </li>
             <li>
-                <a href="saldoClientes.jsp" class="<%= "saldo".equals(activePage) ? "active" : "" %>">
+                <a href="saldoClientesAdmin.jsp" class="<%= "saldo".equals(activePage) ? "active" : "" %>">
                     <svg viewBox="0 0 24 24">
                         <path d="M21 7H3c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zm-1 12H4V9h16v10zm-5-5a2 2 0 1 1 4 0 2 2 0 0 1-4 0zM3 5h16V3H3z"/>
                     </svg>
@@ -558,7 +558,7 @@
                 </a>
             </li>
             <li>
-                <a href="adminProdutos.jsp" class="<%= "produtos".equals(activePage) ? "active" : "" %>">
+                <a href="produtosAdmin.jsp" class="<%= "produtos".equals(activePage) ? "active" : "" %>">
                     <svg viewBox="0 0 24 24">
                         <path d="M20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-5 12H9v-2h6v2zm2-4H7V8h10v2z"/>
                     </svg>
@@ -566,7 +566,7 @@
                 </a>
             </li>
             <li>
-                <a href="adminUtilizadores.jsp" class="<%= "utilizadores".equals(activePage) ? "active" : "" %>">
+                <a href="utilizadoresAdmin.jsp" class="<%= "utilizadores".equals(activePage) ? "active" : "" %>">
                     <svg viewBox="0 0 24 24">
                         <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
                     </svg>
@@ -574,7 +574,7 @@
                 </a>
             </li>
             <li>
-                <a href="adminPromocoes.jsp" class="<%= "promocoes".equals(activePage) ? "active" : "" %>">
+                <a href="promocoesAdmin.jsp" class="<%= "promocoes".equals(activePage) ? "active" : "" %>">
                     <svg viewBox="0 0 24 24">
                         <path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/>
                     </svg>
@@ -582,7 +582,7 @@
                 </a>
             </li>
             <li>
-                <a href="auditoria.jsp" class="<%= "auditoria".equals(activePage) ? "active" : "" %>">
+                <a href="auditoriaAdmin.jsp" class="<%= "auditoria".equals(activePage) ? "active" : "" %>">
                     <svg viewBox="0 0 24 24">
                         <path d="M9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4zm2 2H5V5h14v14zm0-16H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
                     </svg>
@@ -591,7 +591,7 @@
             </li>
             <div class="sidebar-divider"></div>
             <li>
-                <a href="adminPerfil.jsp" class="<%= "perfil".equals(activePage) ? "active" : "" %>">
+                <a href="perfilAdmin.jsp" class="<%= "perfil".equals(activePage) ? "active" : "" %>">
                     <svg viewBox="0 0 24 24">
                         <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
                     </svg>
@@ -693,7 +693,7 @@
                         </svg>
                         Últimas encomendas
                     </div>
-                    <a href="funcEncomendas.jsp" class="btn-ver">Ver todas</a>
+                    <a href="encomendasAdmin.jsp" class="btn-ver">Ver todas</a>
                 </div>
                 <table class="orders-table">
                     <thead>
@@ -723,7 +723,7 @@
                                     ? "" + parts[0].charAt(0) + parts[1].charAt(0)
                                     : "" + parts[0].charAt(0);
                     %>
-                    <tr onclick="location.href='funcEncomendas.jsp?id=<%= oid %>'">
+                    <tr onclick="location.href='encomendasAdmin.jsp?id=<%= oid %>'">
                         <td class="order-id">#<%= oid %></td>
                         <td>
                             <div class="client-cell">
@@ -749,7 +749,7 @@
                         </svg>
                         Últimos utilizadores
                     </div>
-                    <a href="adminUtilizadores.jsp" class="btn-ver">Ver todos</a>
+                    <a href="utilizadoresAdmin.jsp" class="btn-ver">Ver todos</a>
                 </div>
                 <table class="orders-table">
                     <thead>
@@ -773,7 +773,7 @@
                                     ? "" + uparts[0].charAt(0) + uparts[1].charAt(0)
                                     : "" + uparts[0].charAt(0);
                     %>
-                    <tr onclick="location.href='adminUtilizadores.jsp'">
+                    <tr onclick="location.href='utilizadoresAdmin.jsp'">
                         <td>
                             <div class="client-cell">
                                 <div class="avatar-sm"><%= uinitials %></div>
@@ -787,7 +787,7 @@
                     </tbody>
                 </table>
                 <div class="panel-footer">
-                    <a href="adminUtilizadores.jsp">Ver todos os utilizadores →</a>
+                    <a href="utilizadoresAdmin.jsp">Ver todos os utilizadores →</a>
                 </div>
             </div>
 
@@ -798,3 +798,4 @@
 
 </body>
 </html>
+
